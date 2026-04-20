@@ -143,4 +143,10 @@ com `ssh-keygen` e atualize a pub no NPAD.
 
 ---
 
-Mantido por **Helton Maia** · UFRN/IMD · `helton.maia@ufrn.br`
+## Licença
+
+Licenciado sob os termos da [MIT License](LICENSE).
+
+---
+
+Mantido por **Helton Maia** · `helton.maia@ufrn.br` · [heltonmaia.com](https://heltonmaia.com)
