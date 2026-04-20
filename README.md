@@ -1,14 +1,16 @@
 # fishell
 
 Terminal SSH para acesso rápido ao **NPAD/UFRN** (supercomputador do IMD).
-Um único script Bash: configura chaves, registra alias `npad` e abre um
-painel interativo. Funciona em Linux, macOS, WSL e Google Colab.
+Configura chaves, registra alias `npad` e abre um painel interativo.
+
+- **Linux / macOS / WSL / Google Colab** → `fishell.sh` (Bash)
+- **Windows (PowerShell / cmd)** → `fishell.ps1` + `fishell.cmd` (launcher)
 
 ![fishell control panel](screenshot.png)
 
 ---
 
-## Instalação
+## Instalação (Linux / macOS / WSL / Colab)
 
 ```bash
 git clone https://github.com/heltonmaia/fishell.git
@@ -28,6 +30,34 @@ sed -i 's/seu_usuario_aqui/SEU_USER_NPAD/' config.sh
 
 Na primeira execução, o script detecta que o SSH não está configurado,
 faz o *setup* automaticamente e abre o painel.
+
+---
+
+## Instalação (Windows)
+
+Requisitos: Windows 10+ com **OpenSSH Client** ativo (já vem por padrão;
+se não: `Settings → Apps → Optional features → OpenSSH Client`) e
+**Windows Terminal** recomendado para cores/animação.
+
+```powershell
+git clone https://github.com/heltonmaia/fishell.git
+cd fishell
+
+# 1. Chaves SSH vão em .\.ssh\
+mkdir .ssh
+copy $HOME\.ssh\id_rsa     .ssh\
+copy $HOME\.ssh\id_rsa.pub .ssh\
+
+# 2. Configure seu usuário NPAD
+Copy-Item config.ps1.example config.ps1
+notepad config.ps1   # edite $NPAD_USER
+
+# 3. Rode (use o launcher .cmd pra não precisar mexer na ExecutionPolicy)
+.\fishell.cmd
+```
+
+Pode também chamar com subcomando: `fishell.cmd setup | login | test |
+upload | download | status | help`.
 
 ---
 

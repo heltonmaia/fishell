@@ -1,0 +1,23 @@
+# ═══════════════════════════════════════════════════════════════
+#  FISHELL — Configuração do usuário (Windows / PowerShell)
+#  Copie este arquivo para `config.ps1` e edite os valores abaixo.
+#
+#      Copy-Item config.ps1.example config.ps1
+#      notepad config.ps1
+#
+#  O arquivo `config.ps1` é ignorado pelo Git (nunca é commitado).
+# ═══════════════════════════════════════════════════════════════
+
+# Seu usuário do NPAD (obrigatório)
+$NPAD_USER = 'seu_usuario_aqui'
+
+# Host e porta do NPAD (normalmente não precisa mudar)
+$NPAD_HOST = 'sc2.npad.ufrn.br'
+$NPAD_PORT = '4422'
+
+# Pasta onde estão as chaves SSH (id_rsa, id_rsa.pub, known_hosts).
+# Deixe vazio ('') para usar .\.ssh ao lado do script.
+$SSH_KEYS_DIR = ''
+
+# Alias SSH usado no comando `ssh <alias>` (padrão: npad)
+$SSH_ALIAS = 'npad'

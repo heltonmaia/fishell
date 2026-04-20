@@ -144,6 +144,9 @@ menu_prompt_read() {
                 printf -v "$_var" '%s' "$key"
                 printf '%s\n' "$key"
             fi
+            # Garante que o tty saia em modo canônico (o read -rs -N normalmente
+            # restaura, mas em timeout forçado ou sinal pode sobrar state).
+            stty sane 2>/dev/null || true
             return
         fi
         t=$((t+1))
@@ -311,13 +314,16 @@ action_login() {
 action_upload() {
     log_step "upload // local -> npad"
     local src dst
-    read -rp "  $(printf '%b>%b' "$G" "$C_RESET") local path : " src
-    read -rp "  $(printf '%b>%b' "$G" "$C_RESET") remote path [~/] : " dst
+    printf '  %b>%b local path : ' "$G" "$C_RESET"
+    read -r src
+    printf '  %b>%b remote path [~/] : ' "$G" "$C_RESET"
+    read -r dst
     [[ -z "$dst" ]] && dst="~/"
     if [[ ! -e "$src" ]]; then
         log_err "local path '$src' does not exist"
         return 1
     fi
+    stty sane 2>/dev/null || true
     log_work "transferring..."
     scp -P "$NPAD_PORT" -r "$src" "${SSH_ALIAS}:${dst}" \
         && log_ok "transfer complete" || log_err "transfer failed"
@@ -326,9 +332,12 @@ action_upload() {
 action_download() {
     log_step "download // npad -> local"
     local src dst
-    read -rp "  $(printf '%b>%b' "$G" "$C_RESET") remote path : " src
-    read -rp "  $(printf '%b>%b' "$G" "$C_RESET") local path  [./] : " dst
+    printf '  %b>%b remote path : ' "$G" "$C_RESET"
+    read -r src
+    printf '  %b>%b local path  [./] : ' "$G" "$C_RESET"
+    read -r dst
     [[ -z "$dst" ]] && dst="./"
+    stty sane 2>/dev/null || true
     log_work "transferring..."
     scp -P "$NPAD_PORT" -r "${SSH_ALIAS}:${src}" "$dst" \
         && log_ok "transfer complete" || log_err "transfer failed"
@@ -337,10 +346,19 @@ action_download() {
 action_run_remote() {
     log_step "remote exec // $SSH_ALIAS"
     local cmd
-    read -rp "  $(printf '%b>%b' "$G" "$C_RESET") cmd : " cmd
+    # Prompt separado do read (ANSI escapes em read -rp confundem o readline).
+    printf '  %b>%b cmd : ' "$G" "$C_RESET"
+    read -r cmd
     [[ -z "$cmd" ]] && { log_warn "empty command, aborted."; return; }
+    # Reseta estado do terminal (o loop de animação do menu pode ter deixado
+    # o tty em modo não-canônico). Sem isso, algumas linhas do output remoto
+    # chegam com o primeiro char corrompido.
+    stty sane 2>/dev/null || true
     printf '%b─── remote stdout ───%b\n' "$G_DIM" "$C_RESET"
-    ssh "$SSH_ALIAS" "$cmd"
+    # -T: não aloca pseudo-tty (evita warning "stdin is not a tty" e reduz
+    # chance de scripts server-side (/etc/profile, ~/.bashrc) produzirem
+    # erros de escrita em stderr).
+    ssh -T "$SSH_ALIAS" "$cmd"
     printf '%b─── end ─────────────%b\n' "$G_DIM" "$C_RESET"
 }
 

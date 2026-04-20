@@ -16,8 +16,9 @@ authorized_keys
 *.tgz
 *.7z
 
-# Local user config (copy from config.sh.example)
+# Local user config (copy from config.sh.example / config.ps1.example)
 config.sh
+config.ps1
 config.local.sh
 
 # Claude Code workspace notes (mantidos apenas localmente)
