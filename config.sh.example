@@ -1,0 +1,27 @@
+# ═══════════════════════════════════════════════════════════════
+#  HMSHELL — Configuração do usuário
+#  Copie este arquivo para `config.sh` e edite os valores abaixo.
+#
+#      cp config.sh.example config.sh
+#      nano config.sh
+#
+#  O arquivo `config.sh` é ignorado pelo Git (nunca é commitado).
+# ═══════════════════════════════════════════════════════════════
+
+# Seu usuário do NPAD (obrigatório)
+NPAD_USER="seu_usuario_aqui"
+
+# Host e porta do NPAD (normalmente não precisa mudar)
+NPAD_HOST="sc2.npad.ufrn.br"
+NPAD_PORT="4422"
+
+# Pasta onde estão as chaves SSH (id_rsa, id_rsa.pub, known_hosts)
+#
+#   - No Google Colab:   /content/drive/MyDrive/visaocomputacional/.ssh
+#   - Local (padrão):    $(pwd)/.ssh   → a pasta .ssh ao lado do script
+#
+# Deixe vazio para auto-detectar (Colab primeiro, depois pasta local).
+SSH_KEYS_DIR=""
+
+# Alias SSH usado no comando `ssh <alias>` (padrão: npad)
+SSH_ALIAS="npad"

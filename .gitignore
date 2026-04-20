@@ -1,0 +1,39 @@
+# ===== SSH keys & secrets (NEVER commit) =====
+.ssh/
+ssh/
+**/id_rsa
+**/id_rsa.*
+**/*.pem
+**/*.key
+**/known_hosts
+**/known_hosts.*
+authorized_keys
+
+# Archives that may contain keys
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.7z
+
+# Local user config (copy from config.sh.example)
+config.sh
+config.local.sh
+
+# Claude Code workspace notes (mantidos apenas localmente)
+CLAUDE.md
+.claude/
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# Test/scratch files
+teste
+scratch/
+tmp/
