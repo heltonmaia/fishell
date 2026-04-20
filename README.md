@@ -1,18 +1,18 @@
-# hmshell
+# fishell
 
 Terminal SSH para acesso rápido ao **NPAD/UFRN** (supercomputador do IMD).
 Um único script Bash: configura chaves, registra alias `npad` e abre um
 painel interativo. Funciona em Linux, macOS, WSL e Google Colab.
 
-![hmshell control panel](screenshot.png)
+![fishell control panel](screenshot.png)
 
 ---
 
 ## Instalação
 
 ```bash
-git clone https://github.com/heltonmaia/hmshell.git
-cd hmshell
+git clone https://github.com/heltonmaia/fishell.git
+cd fishell
 
 # 1. Chaves SSH do NPAD vão em ./.ssh/
 mkdir -p .ssh
@@ -23,7 +23,7 @@ cp config.sh.example config.sh
 sed -i 's/seu_usuario_aqui/SEU_USER_NPAD/' config.sh
 
 # 3. Rode
-./hmshell.sh
+./fishell.sh
 ```
 
 Na primeira execução, o script detecta que o SSH não está configurado,
@@ -34,14 +34,14 @@ faz o *setup* automaticamente e abre o painel.
 ## Comandos
 
 ```bash
-./hmshell.sh              # painel interativo
-./hmshell.sh setup        # (re)configura o SSH
-./hmshell.sh login        # conecta (= ssh npad)
-./hmshell.sh test         # testa conexão
-./hmshell.sh upload       # scp push (interativo)
-./hmshell.sh download     # scp pull (interativo)
-./hmshell.sh status       # mostra configuração
-./hmshell.sh help         # ajuda
+./fishell.sh              # painel interativo
+./fishell.sh setup        # (re)configura o SSH
+./fishell.sh login        # conecta (= ssh npad)
+./fishell.sh test         # testa conexão
+./fishell.sh upload       # scp push (interativo)
+./fishell.sh download     # scp pull (interativo)
+./fishell.sh status       # mostra configuração
+./fishell.sh help         # ajuda
 ```
 
 Depois do `setup`, o alias fica em `~/.ssh/config` e você pode usar SSH
@@ -57,7 +57,7 @@ Variáveis de ambiente:
 
 | Var                | Efeito                                   |
 | ------------------ | ---------------------------------------- |
-| `HMSHELL_NOANIM=1` | desativa typewriter/boot animation       |
+| `FISHELL_NOANIM=1` | desativa typewriter/boot animation       |
 | `NO_COLOR=1`       | desativa cores ANSI                      |
 
 ---
@@ -81,27 +81,27 @@ No notebook:
 from google.colab import drive
 drive.mount('/content/drive')
 
-!git clone https://github.com/heltonmaia/hmshell.git /content/hmshell
-%cd /content/hmshell
+!git clone https://github.com/heltonmaia/fishell.git /content/fishell
+%cd /content/fishell
 !cp config.sh.example config.sh
 !sed -i 's/seu_usuario_aqui/SEU_USER/' config.sh
-!bash hmshell.sh setup
+!bash fishell.sh setup
 ```
 
 O script detecta `/content/drive/MyDrive/visaocomputacional/.ssh`
-automaticamente. Rode `bash hmshell.sh setup` sempre que a VM do Colab
+automaticamente. Rode `bash fishell.sh setup` sempre que a VM do Colab
 reiniciar.
 
 ---
 
 ## Troubleshooting
 
-| Problema                          | Solução                                                          |
-| --------------------------------- | ---------------------------------------------------------------- |
+| Problema                          | Solução                                                            |
+| --------------------------------- | ------------------------------------------------------------------ |
 | `Permission denied (publickey)`   | Confirme `NPAD_USER` no `config.sh` e se a pub foi enviada ao NPAD |
 | `chave privada não encontrada`    | `.ssh/id_rsa` deve existir, ou defina `SSH_KEYS_DIR` no config     |
 | `Host key verification failed`    | `ssh-keygen -R '[sc2.npad.ufrn.br]:4422'` e rode `setup` de novo   |
-| Timeout / conexão trava            | `./hmshell.sh test` — se falhar, verifique firewall e porta 4422  |
+| Timeout / conexão trava           | `./fishell.sh test` — se falhar, verifique firewall e porta 4422   |
 
 ---
 

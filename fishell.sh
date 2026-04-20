@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # ═══════════════════════════════════════════════════════════════
-#  HMSHELL — NPAD/UFRN SSH access terminal
-#  https://github.com/heltonmaia/hmshell
+#  FISHELL — NPAD/UFRN SSH access terminal
+#  https://github.com/heltonmaia/fishell
 # ═══════════════════════════════════════════════════════════════
 set -o pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-HMSHELL_VERSION="2.0"
+FISHELL_VERSION="2.1"
 
 # ─── Paleta "terminal hacker" (verde matrix) ──────────────────
 if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
@@ -39,10 +39,10 @@ log_err()   { printf '%b[x]%b %s\n' "$RED"        "$C_RESET" "$*" >&2; }
 log_step()  { printf '\n%b[»]%b %b%s%b\n' "$G"    "$C_RESET" "$C_BOLD" "$*" "$C_RESET"; }
 log_work()  { printf '%b[~]%b %s\n' "$G_DIM"      "$C_RESET" "$*"; }
 
-# Typewriter — efeito opcional; desativado se HMSHELL_NOANIM=1
+# Typewriter — efeito opcional; desativado se FISHELL_NOANIM=1
 typewrite() {
     local text="$1" delay="${2:-0.008}"
-    if [[ "${HMSHELL_NOANIM:-0}" == "1" || ! -t 1 ]]; then
+    if [[ "${FISHELL_NOANIM:-0}" == "1" || ! -t 1 ]]; then
         printf '%s\n' "$text"
         return
     fi
@@ -64,27 +64,117 @@ hline() {
     printf '%b%s%b\n' "$G_DIM" "$line" "$C_RESET"
 }
 
-print_banner() {
-    clear 2>/dev/null || true
+# Desenha uma cena do logo (aquário + FISHELL) para o frame t.
+# Bolhas sobem de baixo para cima, peixinho (·) nada da esquerda p/ direita.
+draw_logo_scene() {
+    local t="$1"
+    local fish_col=$(( (t / 2) % 14 ))
+
+    # 6 linhas × 16 colunas de "água"
+    local rows=("                " "                " "                " \
+                "                " "                " "                ")
+
+    # Bolhas: (col, fase inicial, char)
+    local b_cols=(3 8 12 5 14 10)
+    local b_phs=(0 3 1 5 2 4)
+    local b_chr=("o" "O" "*" "°" "o" "*")
+    local i p c ch r before after
+    for i in 0 1 2 3 4 5; do
+        p=${b_phs[i]}; c=${b_cols[i]}; ch=${b_chr[i]}
+        r=$(( (p - t % 6 + 6) % 6 ))
+        before="${rows[r]:0:$c}"
+        after="${rows[r]:$((c+1))}"
+        rows[r]="${before}${ch}${after}"
+    done
+
+    # Peixinho (pontinho) na linha central
+    r=3; c=$fish_col
+    before="${rows[r]:0:$c}"
+    after="${rows[r]:$((c+1))}"
+    rows[r]="${before}·${after}"
+
+    local -a fs=(
+        "███████╗██╗███████╗██╗  ██╗███████╗██╗     ██╗"
+        "██╔════╝██║██╔════╝██║  ██║██╔════╝██║     ██║"
+        "█████╗  ██║███████╗███████║█████╗  ██║     ██║"
+        "██╔══╝  ██║╚════██║██╔══██║██╔══╝  ██║     ██║"
+        "██║     ██║███████║██║  ██║███████╗███████╗███████╗"
+        "╚═╝     ╚═╝╚══════╝╚═╝  ╚═╝╚══════╝╚══════╝╚══════╝"
+    )
+
     printf '%b' "$G"
-    cat <<'EOF'
-  ██╗  ██╗███╗   ███╗███████╗██╗  ██╗███████╗██╗     ██╗
-  ██║  ██║████╗ ████║██╔════╝██║  ██║██╔════╝██║     ██║
-  ███████║██╔████╔██║███████╗███████║█████╗  ██║     ██║
-  ██╔══██║██║╚██╔╝██║╚════██║██╔══██║██╔══╝  ██║     ██║
-  ██║  ██║██║ ╚═╝ ██║███████║██║  ██║███████╗███████╗███████╗
-  ╚═╝  ╚═╝╚═╝     ╚═╝╚══════╝╚═╝  ╚═╝╚══════╝╚══════╝╚══════╝
-EOF
+    for i in 0 1 2 3 4 5; do
+        printf '  %s  %b%s%b\n' "${rows[i]}" "$G_BRIGHT" "${fs[i]}" "$G"
+    done
     printf '%b' "$C_RESET"
-    printf '%b  » npad/ufrn secure access terminal  ::  v%s%b\n' "$G_DIM" "$HMSHELL_VERSION" "$C_RESET"
+}
+
+print_info_line() {
+    printf '%b  » npad/ufrn secure access terminal  ::  v%s%b\n' "$G_DIM" "$FISHELL_VERSION" "$C_RESET"
     printf '%b  » target: sc2.npad.ufrn.br:4422       ::  imd/ufrn%b\n\n' "$G_DIM" "$C_RESET"
+}
+
+# Logo estático — usado em cada redraw do menu (não anima).
+# Varia o frame com base em $SECONDS pra dar leve variação entre redraws.
+print_logo() {
+    local frame=$(( SECONDS % 6 ))
+    draw_logo_scene "$frame"
+    print_info_line
+}
+
+# Lê uma tecla do menu mantendo o aquário animando no topo.
+# Com FISHELL_NOANIM=1 ou sem TTY, cai num read normal.
+menu_prompt_read() {
+    local _var="$1"
+    if [[ "${FISHELL_NOANIM:-0}" == "1" || ! -t 0 || ! -t 1 ]]; then
+        read -r "$_var"
+        return
+    fi
+    printf '\0337'   # DECSC: salva posição do cursor (no prompt)
+    local t=0 key=""
+    while true; do
+        printf '\033[H'           # vai pro canto superior esquerdo
+        draw_logo_scene "$t"      # redesenha só as 6 linhas do banner
+        printf '\0338'            # DECRC: volta o cursor ao prompt
+        if IFS= read -rs -t 0.12 -N 1 key; then
+            if [[ "$key" == $'\n' || "$key" == $'\r' ]]; then
+                printf -v "$_var" ''
+                echo
+            else
+                printf -v "$_var" '%s' "$key"
+                printf '%s\n' "$key"
+            fi
+            return
+        fi
+        t=$((t+1))
+    done
+}
+
+# Animação de entrada: peixinho nada + bolhas sobem (~1.5s).
+animate_intro() {
+    if [[ "${FISHELL_NOANIM:-0}" == "1" || ! -t 1 ]]; then
+        print_logo
+        return
+    fi
+    clear 2>/dev/null || true
+    local t frames=16 delay=0.08
+    for (( t=0; t<frames; t++ )); do
+        tput cup 0 0 2>/dev/null || printf '\033[H'
+        draw_logo_scene "$t"
+        sleep "$delay"
+    done
+    print_info_line
+}
+
+print_banner() {
+    animate_intro
 }
 
 # Boot sequence curta (rodada 1x por sessão)
 boot_sequence() {
-    [[ "${HMSHELL_NOANIM:-0}" == "1" || ! -t 1 ]] && return
+    [[ "${FISHELL_NOANIM:-0}" == "1" || ! -t 1 ]] && return
     printf '%b' "$G_DIM"
-    typewrite "  [boot] loading hmshell runtime..." 0.004
+    typewrite "  [boot] loading fishell runtime..." 0.004
     typewrite "  [boot] scanning local environment..." 0.004
     typewrite "  [boot] checking credentials path..." 0.004
     typewrite "  [boot] ready." 0.004
@@ -172,7 +262,7 @@ setup_ssh() {
         fi
     done
 
-    local tmp_block="$home_ssh/.hmshell.block"
+    local tmp_block="$home_ssh/.fishell.block"
     cat > "$tmp_block" <<EOF
 Host $SSH_ALIAS
     HostName $NPAD_HOST
@@ -187,9 +277,9 @@ EOF
     if ! grep -q "^Host $SSH_ALIAS\$" "$home_ssh/config" 2>/dev/null; then
         {
             echo ""
-            echo "# ── hmshell: begin ──"
+            echo "# ── fishell: begin ──"
             cat "$tmp_block"
-            echo "# ── hmshell: end ──"
+            echo "# ── fishell: end ──"
         } >> "$home_ssh/config"
         log_ok "ssh alias '$SSH_ALIAS' registered in ~/.ssh/config"
     else
@@ -262,7 +352,7 @@ show_status() {
     printf '  %bPORT      %b %s\n' "$G_BRIGHT" "$C_RESET" "$NPAD_PORT"
     printf '  %bALIAS     %b %s\n' "$G_BRIGHT" "$C_RESET" "$SSH_ALIAS"
     printf '  %bKEYS_DIR  %b %s\n' "$G_BRIGHT" "$C_RESET" "$SSH_KEYS_DIR"
-    printf '  %bVERSION   %b hmshell v%s\n' "$G_BRIGHT" "$C_RESET" "$HMSHELL_VERSION"
+    printf '  %bVERSION   %b fishell v%s\n' "$G_BRIGHT" "$C_RESET" "$FISHELL_VERSION"
     hline 50 ─
 }
 
@@ -270,7 +360,7 @@ show_help() {
     cat <<EOF
 
 ${G_BRIGHT}USAGE${C_RESET}
-  ${G}\$${C_RESET} ./hmshell.sh [command]
+  ${G}\$${C_RESET} ./fishell.sh [command]
 
 ${G_BRIGHT}COMMANDS${C_RESET}
   ${G}(none)${C_RESET}     launch interactive control panel
@@ -283,7 +373,7 @@ ${G_BRIGHT}COMMANDS${C_RESET}
   ${G}help${C_RESET}       display this panel
 
 ${G_BRIGHT}ENV${C_RESET}
-  ${GRAY}HMSHELL_NOANIM=1${C_RESET}   disable typewriter/boot animation
+  ${GRAY}FISHELL_NOANIM=1${C_RESET}   disable typewriter/boot animation
   ${GRAY}NO_COLOR=1${C_RESET}         disable ansi colors
 
 ${G_BRIGHT}CONFIG${C_RESET}
@@ -298,8 +388,8 @@ pause_return() {
 }
 
 menu_header() {
-    printf '%b  hmshell v%s%b  %b::%b  %b%s@%s%b  %b::%b  type %b0%b or %bq%b to exit%b\n\n' \
-        "$G_DIM" "$HMSHELL_VERSION" "$C_RESET" \
+    printf '%b  fishell v%s%b  %b::%b  %b%s@%s%b  %b::%b  type %b0%b or %bq%b to exit%b\n\n' \
+        "$G_DIM" "$FISHELL_VERSION" "$C_RESET" \
         "$G" "$C_RESET" \
         "$G_BRIGHT" "$NPAD_USER" "$NPAD_HOST" "$C_RESET" \
         "$G" "$C_RESET" \
@@ -311,26 +401,61 @@ menu() {
     local flash=""
     while true; do
         clear 2>/dev/null || true
+        print_logo
         menu_header
         if [[ -n "$flash" ]]; then
             printf '%s\n\n' "$flash"
             flash=""
         fi
+        # Linha do painel: 50 chars entre as barras. Layout:
+        #   "  [X]  <title:20> <hint:16>      " = 2+3+2+20+1+16+6 = 50
+        _row() {
+            local kc="$1" k="$2" title="$3" hint="$4"
+            printf '%b║%b  %b%s%b  %b%-20s%b %b%-16s%b      %b║%b\n' \
+                "$G" "$C_RESET" \
+                "$kc" "$k" "$C_RESET" \
+                "$G_BRIGHT" "$title" "$C_RESET" \
+                "$CYA" "$hint" "$C_RESET" \
+                "$G" "$C_RESET"
+        }
         printf '%b╔══════════════════════════════════════════════════╗%b\n' "$G" "$C_RESET"
-        printf '%b║%b   %b░ CONTROL PANEL ░%b                              %b║%b\n' "$G" "$C_RESET" "$G_BRIGHT$C_BOLD" "$C_RESET" "$G" "$C_RESET"
+        # Header: "   ░ CONTROL PANEL ░                              " = 3+1+1+13+1+1+30 = 50
+        printf '%b║%b   %b░%b %b%-13s%b %b░%b                              %b║%b\n' \
+            "$G" "$C_RESET" \
+            "$CYA" "$C_RESET" \
+            "$G_BRIGHT$C_BOLD" "CONTROL PANEL" "$C_RESET" \
+            "$CYA" "$C_RESET" \
+            "$G" "$C_RESET"
         printf '%b╠══════════════════════════════════════════════════╣%b\n' "$G" "$C_RESET"
-        printf '%b║%b  %b[1]%b  open secure shell      ( ssh npad )       %b║%b\n' "$G" "$C_RESET" "$G_BRIGHT" "$C_RESET" "$G" "$C_RESET"
-        printf '%b║%b  %b[2]%b  probe connection       ( dry-run test )    %b║%b\n' "$G" "$C_RESET" "$G_BRIGHT" "$C_RESET" "$G" "$C_RESET"
-        printf '%b║%b  %b[3]%b  upload payload         ( scp push )        %b║%b\n' "$G" "$C_RESET" "$G_BRIGHT" "$C_RESET" "$G" "$C_RESET"
-        printf '%b║%b  %b[4]%b  download payload       ( scp pull )        %b║%b\n' "$G" "$C_RESET" "$G_BRIGHT" "$C_RESET" "$G" "$C_RESET"
-        printf '%b║%b  %b[5]%b  exec remote command    ( one-shot )        %b║%b\n' "$G" "$C_RESET" "$G_BRIGHT" "$C_RESET" "$G" "$C_RESET"
-        printf '%b║%b  %b[6]%b  redeploy ssh payload   ( re-setup )        %b║%b\n' "$G" "$C_RESET" "$G_BRIGHT" "$C_RESET" "$G" "$C_RESET"
-        printf '%b║%b  %b[7]%b  system readout         ( status )          %b║%b\n' "$G" "$C_RESET" "$G_BRIGHT" "$C_RESET" "$G" "$C_RESET"
-        printf '%b║%b  %b[0]%b  logout                 ( exit )            %b║%b\n' "$G" "$C_RESET" "$RED" "$C_RESET" "$G" "$C_RESET"
+        _row "$YEL" "[1]" "open secure shell"    "( ssh npad )"
+        _row "$YEL" "[2]" "probe connection"     "( dry-run test )"
+        _row "$YEL" "[3]" "upload payload"       "( scp push )"
+        _row "$YEL" "[4]" "download payload"     "( scp pull )"
+        _row "$YEL" "[5]" "exec remote command"  "( one-shot )"
+        _row "$YEL" "[6]" "redeploy ssh payload" "( re-setup )"
+        _row "$YEL" "[7]" "system readout"       "( status )"
+        local _anim_label _anim_color
+        if [[ "${FISHELL_NOANIM:-0}" == "1" ]]; then
+            _anim_label="off"; _anim_color="$G_DIM"
+        else
+            _anim_label="on "; _anim_color="$G_BRIGHT"
+        fi
+        # [a] row: "  [a]  toggle animation     ( on  )               " = 2+3+2+20+1+1+1+3+1+1+15 = 50
+        printf '%b║%b  %b[a]%b  %b%-20s%b %b(%b %b%-3s%b %b)%b               %b║%b\n' \
+            "$G" "$C_RESET" \
+            "$CYA" "$C_RESET" \
+            "$G_BRIGHT" "toggle animation" "$C_RESET" \
+            "$CYA" "$C_RESET" \
+            "$_anim_color" "$_anim_label" "$C_RESET" \
+            "$CYA" "$C_RESET" \
+            "$G" "$C_RESET"
+        _row "$RED" "[0]" "logout"               "( exit )"
         printf '%b╚══════════════════════════════════════════════════╝%b\n' "$G" "$C_RESET"
         local opt
-        read -rp "$(printf '\n%bhmshell%b@%bnpad%b:%b~%b%b#%b ' "$G_BRIGHT" "$C_RESET" "$CYA" "$C_RESET" "$G_DIM" "$C_RESET" "$G_BRIGHT" "$C_RESET")" opt
+        printf '\n%bfishell%b@%bnpad%b:%b~%b%b#%b ' "$G_BRIGHT" "$C_RESET" "$CYA" "$C_RESET" "$G_DIM" "$C_RESET" "$G_BRIGHT" "$C_RESET"
+        menu_prompt_read opt
         clear 2>/dev/null || true
+        print_logo
         case "$opt" in
             1|01) action_login ;;
             2|02) test_connection;  pause_return ;;
@@ -339,6 +464,15 @@ menu() {
             5|05) action_run_remote; pause_return ;;
             6|06) setup_ssh;        pause_return ;;
             7|07) show_status;      pause_return ;;
+            a|A)
+                if [[ "${FISHELL_NOANIM:-0}" == "1" ]]; then
+                    export FISHELL_NOANIM=0
+                    flash="$(printf '%b[*]%b animation: %bon%b' "$G" "$C_RESET" "$G_BRIGHT" "$C_RESET")"
+                else
+                    export FISHELL_NOANIM=1
+                    flash="$(printf '%b[*]%b animation: %boff%b' "$G" "$C_RESET" "$G_DIM" "$C_RESET")"
+                fi
+                ;;
             0|00|q|exit|logout)
                 printf '\n%b[*]%b session terminated. %bgoodbye.%b\n\n' "$G" "$C_RESET" "$G_DIM" "$C_RESET"
                 exit 0 ;;
