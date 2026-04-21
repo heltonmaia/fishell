@@ -277,7 +277,24 @@ Host $SSH_ALIAS
 EOF
     touch "$home_ssh/config"
     chmod 600 "$home_ssh/config"
-    if ! grep -q "^Host $SSH_ALIAS\$" "$home_ssh/config" 2>/dev/null; then
+    if grep -q '^# ── fishell: begin ──$' "$home_ssh/config" 2>/dev/null; then
+        # bloco gerenciado pelo fishell já existe: remove e reescreve com a config atual
+        local cfg_tmp="$home_ssh/.config.fishell.tmp"
+        awk '
+            /^# ── fishell: begin ──$/ { skip=1; next }
+            /^# ── fishell: end ──$/   { skip=0; next }
+            !skip
+        ' "$home_ssh/config" > "$cfg_tmp"
+        mv "$cfg_tmp" "$home_ssh/config"
+        chmod 600 "$home_ssh/config"
+        {
+            echo ""
+            echo "# ── fishell: begin ──"
+            cat "$tmp_block"
+            echo "# ── fishell: end ──"
+        } >> "$home_ssh/config"
+        log_ok "ssh alias '$SSH_ALIAS' updated in ~/.ssh/config"
+    elif ! grep -q "^Host $SSH_ALIAS\$" "$home_ssh/config" 2>/dev/null; then
         {
             echo ""
             echo "# ── fishell: begin ──"
@@ -286,7 +303,7 @@ EOF
         } >> "$home_ssh/config"
         log_ok "ssh alias '$SSH_ALIAS' registered in ~/.ssh/config"
     else
-        log_info "alias '$SSH_ALIAS' already present (kept)"
+        log_warn "alias '$SSH_ALIAS' exists in ~/.ssh/config but was not created by fishell — kept as is"
     fi
     rm -f "$tmp_block"
 

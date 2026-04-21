@@ -194,8 +194,7 @@ function Setup-SSH {
     if (-not (Test-Path $sshCfg)) { New-Item -ItemType File -Path $sshCfg -Force | Out-Null }
 
     $existing = Get-Content $sshCfg -Raw -ErrorAction SilentlyContinue
-    if ($existing -notmatch "(?m)^Host $([regex]::Escape($script:SSH_ALIAS))\s*$") {
-        $block = @"
+    $block = @"
 
 # ── fishell: begin ──
 Host $($script:SSH_ALIAS)
@@ -207,10 +206,21 @@ Host $($script:SSH_ALIAS)
     ServerAliveCountMax 3
 # ── fishell: end ──
 "@
+    if ($existing -match '(?ms)^# ── fishell: begin ──\s*?\r?\n.*?^# ── fishell: end ──\s*?\r?\n?') {
+        # bloco gerenciado pelo fishell já existe: remove e reescreve com a config atual
+        $stripped = [regex]::Replace(
+            $existing,
+            '(?ms)(\r?\n)?^# ── fishell: begin ──\s*?\r?\n.*?^# ── fishell: end ──\s*?\r?\n?',
+            ''
+        )
+        Set-Content -Path $sshCfg -Value $stripped -NoNewline
+        Add-Content -Path $sshCfg -Value $block
+        Log-Ok "ssh alias '$($script:SSH_ALIAS)' updated in ~/.ssh/config"
+    } elseif ($existing -notmatch "(?m)^Host $([regex]::Escape($script:SSH_ALIAS))\s*$") {
         Add-Content -Path $sshCfg -Value $block
         Log-Ok "ssh alias '$($script:SSH_ALIAS)' registered in ~/.ssh/config"
     } else {
-        Log-Info "alias '$($script:SSH_ALIAS)' already present (kept)"
+        Log-Warn "alias '$($script:SSH_ALIAS)' exists in ~/.ssh/config but was not created by fishell - kept as is"
     }
 
     Write-Line ""
