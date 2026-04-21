@@ -124,6 +124,33 @@ reiniciar.
 
 ---
 
+## Migrando para outra máquina (Linux / macOS / WSL)
+
+Após `git clone`, copie os arquivos locais (bloqueados pelo `.gitignore`)
+da máquina de origem: `config.sh` e a pasta `.ssh/` inteira
+(`id_rsa`, `id_rsa.pub`, `known_hosts`).
+
+Exemplo com `scp`:
+
+```bash
+scp config.sh  usuario@nova-maquina:~/fishell/
+scp -r .ssh    usuario@nova-maquina:~/fishell/
+```
+
+Na máquina nova, ajuste as permissões — o SSH recusa a chave se `.ssh/`
+ou `id_rsa` estiverem com permissão frouxa:
+
+```bash
+cd ~/fishell
+chmod 700 .ssh
+chmod 600 .ssh/id_rsa .ssh/known_hosts
+chmod 644 .ssh/id_rsa.pub
+chmod +x fishell.sh
+./fishell.sh
+```
+
+---
+
 ## Troubleshooting
 
 | Problema                          | Solução                                                            |
