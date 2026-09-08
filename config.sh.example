@@ -1,5 +1,5 @@
 # ═══════════════════════════════════════════════════════════════
-#  HMSHELL — Configuração do usuário
+#  FISHELL — Configuração do usuário (Linux / macOS / WSL / Colab)
 #  Copie este arquivo para `config.sh` e edite os valores abaixo.
 #
 #      cp config.sh.example config.sh

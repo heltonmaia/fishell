@@ -1,5 +1,4 @@
-#!/usr/bin/env pwsh
-# ═══════════════════════════════════════════════════════════════════════════
+﻿# ═══════════════════════════════════════════════════════════════════════════
 #  fishell.ps1 — porta Windows/PowerShell do fishell
 #  Acesso SSH rápido ao NPAD/UFRN (sc2.npad.ufrn.br:4422).
 #
@@ -8,17 +7,27 @@
 #      Settings → Apps → Optional features → "OpenSSH Client")
 #    - PowerShell 5.1 (padrão) ou PowerShell 7+
 #    - Windows Terminal recomendado (cores/ANSI + Unicode)
+#
+#  ATENÇÃO: este arquivo PRECISA ser salvo em UTF-8 COM BOM. O Windows
+#  PowerShell 5.1 lê .ps1 sem BOM como ANSI/Windows-1252, o que destrói a
+#  arte do banner, as bordas do painel E o regex das sentinelas
+#  "# ── fishell: begin ──" (fazendo cada setup duplicar o bloco no
+#  ~/.ssh/config a cada execução). O CI tem um guard contra isso.
 # ═══════════════════════════════════════════════════════════════════════════
 
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)]
-    [ValidateSet('menu', 'setup', 'login', 'test', 'upload', 'download', 'status', 'help', '')]
-    [string]$Action = 'menu'
+    [ValidateSet('menu', 'setup', 'login', 'test', 'upload', 'download',
+                 'run', 'keygen', 'forget', 'status', 'help', '')]
+    [string]$Action = 'menu',
+
+    [Parameter(Position = 1, ValueFromRemainingArguments = $true)]
+    [string[]]$Rest
 )
 
 $ErrorActionPreference = 'Stop'
-$FishellVersion = '2.1'
+$FishellVersion = '2.2'
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 # UTF-8 no console pra Unicode (blocos, box drawing, ·, °).
@@ -29,8 +38,10 @@ try {
 
 # ─── Paleta ───────────────────────────────────────────────────────────────
 $UseColor = -not $env:NO_COLOR -and $Host.UI.SupportsVirtualTerminal
+# $E é o ESC e precisa existir SEMPRE: as sequências de posicionamento de
+# cursor (\e[H, \e7, \e8) são usadas mesmo com as cores desligadas.
+$E = [char]27
 if ($UseColor) {
-    $E = [char]27
     $R = "$E[0m"; $B = "$E[1m"
     $G = "$E[38;5;46m"; $GD = "$E[38;5;28m"; $GB = "$E[38;5;118m"
     $RED = "$E[38;5;196m"; $YEL = "$E[38;5;226m"
@@ -55,6 +66,7 @@ $script:NPAD_HOST = 'sc2.npad.ufrn.br'
 $script:NPAD_PORT = '4422'
 $script:SSH_ALIAS = 'npad'
 $script:SSH_KEYS_DIR = ''
+$script:SetupOk = $false
 
 function Load-Config {
     $cfg = Join-Path $ScriptDir 'config.ps1'
@@ -124,7 +136,8 @@ function Draw-LogoScene {
 
 function Print-InfoLine {
     Write-Line "${GD}  » npad/ufrn secure access terminal  ::  v${FishellVersion}${R}"
-    Write-Line "${GD}  » target: ${script:NPAD_HOST}:${script:NPAD_PORT}       ::  imd/ufrn${R}"
+    $target = "$($script:NPAD_HOST):$($script:NPAD_PORT)"
+    Write-Line "${GD}  » target: $($target.PadRight(28))::  imd/ufrn${R}"
     Write-Line ""
 }
 
@@ -150,6 +163,7 @@ function Animate-Intro {
 
 # ─── Setup SSH ────────────────────────────────────────────────────────────
 function Setup-SSH {
+    $script:SetupOk = $false
     Log-Step "initializing ssh payload for user '$($script:NPAD_USER)'"
     $homeSsh = Join-Path $HOME '.ssh'
     if (-not (Test-Path $homeSsh)) { New-Item -ItemType Directory -Path $homeSsh -Force | Out-Null }
@@ -168,6 +182,7 @@ function Setup-SSH {
     if (-not $priv) {
         Log-Err "private key not found in $($script:SSH_KEYS_DIR)"
         Log-Info "expected: id_rsa (or id_rsa.txt)"
+        Log-Info "run '.\fishell.ps1 keygen' to create one"
         return
     }
     $dstPriv = Join-Path $homeSsh 'id_rsa'
@@ -225,6 +240,7 @@ Host $($script:SSH_ALIAS)
 
     Write-Line ""
     Log-Ok "payload ready. connect with: ${GB}${B}ssh $($script:SSH_ALIAS)${R}"
+    $script:SetupOk = $true
 }
 
 # Restringe ACL da chave privada ao usuário atual (equivalente a chmod 600).
@@ -285,14 +301,55 @@ function Action-Download {
 }
 
 function Action-RunRemote {
+    param([string]$Command = '')
     Log-Step "remote exec // $($script:SSH_ALIAS)"
-    $cmd = Prompt-Value -Label 'cmd'
+    $cmd = $Command
+    if ([string]::IsNullOrWhiteSpace($cmd)) { $cmd = Prompt-Value -Label 'cmd' }
     if ([string]::IsNullOrWhiteSpace($cmd)) { Log-Warn "empty command, aborted."; return }
     Write-Line "${GD}─── remote stdout ───${R}"
     # -T: não aloca pseudo-tty (evita scripts server-side /etc/profile ou
     # ~/.bashrc falharem com "Input/output error" ao escrever no stderr).
     & ssh -T $script:SSH_ALIAS $cmd
     Write-Line "${GD}─── end ─────────────${R}"
+}
+
+function Action-Keygen {
+    Log-Step "generating ssh keypair in $($script:SSH_KEYS_DIR)"
+    $key = Join-Path $script:SSH_KEYS_DIR 'id_rsa'
+    if (Test-Path $key) {
+        Log-Warn "keypair already exists: $key"
+        Log-Info "remove it by hand first if you really want a new one."
+        return
+    }
+    if (-not (Test-Path $script:SSH_KEYS_DIR)) {
+        New-Item -ItemType Directory -Path $script:SSH_KEYS_DIR -Force | Out-Null
+    }
+    # -N '' = sem passphrase (o fluxo BatchMode/Colab depende disso).
+    & ssh-keygen -t rsa -b 4096 -N '' -C "$($script:NPAD_USER)@fishell" -f $key | Out-Null
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path $key)) {
+        Log-Err "ssh-keygen failed"
+        return
+    }
+    Restrict-KeyAcl $key
+    Log-Ok "keypair created -> $key"
+    Write-Line ""
+    Write-Line "${GD}  append this public key to $($script:NPAD_USER)@$($script:NPAD_HOST):~/.ssh/authorized_keys${R}"
+    Write-Line ""
+    Write-Line "${GB}$(Get-Content "$key.pub" -Raw)${R}"
+    Log-Info "then run: .\fishell.ps1 setup"
+}
+
+# Remove a host key do NPAD do ~/.ssh/known_hosts — conserta o erro
+# "Host key verification failed" depois que o servidor troca de chave.
+function Action-ForgetHostKey {
+    Log-Step "clearing host key for [$($script:NPAD_HOST)]:$($script:NPAD_PORT)"
+    & ssh-keygen -R "[$($script:NPAD_HOST)]:$($script:NPAD_PORT)" 2>$null | Out-Null
+    if ($LASTEXITCODE -eq 0) {
+        Log-Ok "entry removed from ~/.ssh/known_hosts"
+        Log-Info "next connection will ask to confirm the new fingerprint."
+    } else {
+        Log-Warn "nothing removed (no matching entry in known_hosts)"
+    }
 }
 
 function Show-Status {
@@ -322,8 +379,16 @@ ${GB}COMMANDS${R}
   ${G}test${R}       probe connection (no shell)
   ${G}upload${R}     scp file/folder to npad (interactive)
   ${G}download${R}   scp file/folder from npad (interactive)
+  ${G}run${R} <cmd>  run one command on npad and print the output
+  ${G}keygen${R}     generate a new keypair in the keys dir
+  ${G}forget${R}     drop the npad host key from known_hosts
   ${G}status${R}     show current configuration
   ${G}help${R}       display this panel
+
+${GB}CONTROL PANEL${R}
+  ${G}1${R} shell   ${G}2${R} test   ${G}3${R} upload   ${G}4${R} download   ${G}5${R} run
+  ${G}6${R} setup   ${G}7${R} status ${G}8${R} keygen   ${G}9${R} forget
+  ${G}a${R} toggle animation      ${G}0${R}/${G}q${R} exit
 
 ${GB}ENV${R}
   ${GRAY}FISHELL_NOANIM=1${R}   disable banner animation
@@ -371,12 +436,16 @@ function Draw-Panel {
     Panel-Row $YEL '[5]' 'exec remote command'  '( one-shot )'
     Panel-Row $YEL '[6]' 'redeploy ssh payload' '( re-setup )'
     Panel-Row $YEL '[7]' 'system readout'       '( status )'
+    Panel-Row $YEL '[8]' 'generate keypair'     '( ssh-keygen )'
+    Panel-Row $YEL '[9]' 'forget host key'      '( known_hosts )'
     if ($env:FISHELL_NOANIM -eq '1') { $al = 'off'; $ac = $GD } else { $al = 'on '; $ac = $GB }
     $ttl = 'toggle animation'.PadRight(20)
     Write-Line ("${G}║${R}  ${CYA}[a]${R}  ${GB}${ttl}${R} ${CYA}(${R} ${ac}${al}${R} ${CYA})${R}               ${G}║${R}")
     Panel-Row $RED '[0]' 'logout'               '( exit )'
     Write-Line "${G}╚══════════════════════════════════════════════════╝${R}"
-    Write-Raw "`n${GB}fishell${R}@${CYA}npad${R}:${GD}~${R}${GB}#${R} "
+    # Prompt pede a opção em vez de imitar um shell: um "fishell@npad:~#"
+    # dá a impressão de que dá pra digitar comando ali.
+    Write-Raw "`n  ${G}>${R} ${GB}select option${R} ${GD}[1-9, a, 0]${R} : "
 }
 
 # Lê 1 tecla mantendo o aquário animado no topo.
@@ -420,6 +489,8 @@ function Menu-Loop {
             '^5$'                  { Action-RunRemote;     Pause-Return }
             '^6$'                  { Setup-SSH;            Pause-Return }
             '^7$'                  { Show-Status;          Pause-Return }
+            '^8$'                  { Action-Keygen;        Pause-Return }
+            '^9$'                  { Action-ForgetHostKey; Pause-Return }
             '^[aA]$' {
                 if ($env:FISHELL_NOANIM -eq '1') {
                     $env:FISHELL_NOANIM = '0'
@@ -442,6 +513,14 @@ function Menu-Loop {
 }
 
 # ─── Entry point ─────────────────────────────────────────────────────────
+# `help` roda antes do Load-Config: precisa funcionar sem config.ps1 ainda
+# preenchido (é assim no bash também).
+if ($Action -eq 'help') {
+    Animate-Intro
+    Show-Help
+    exit 0
+}
+
 Load-Config
 
 switch ($Action) {
@@ -450,8 +529,10 @@ switch ($Action) {
     'test'     { Animate-Intro; Test-Connection-Npad }
     'upload'   { Animate-Intro; Action-Upload }
     'download' { Animate-Intro; Action-Download }
+    'run'      { Animate-Intro; Action-RunRemote -Command ($Rest -join ' ') }
+    'keygen'   { Animate-Intro; Action-Keygen }
+    'forget'   { Animate-Intro; Action-ForgetHostKey }
     'status'   { Animate-Intro; Show-Status }
-    'help'     { Show-Help }
     default    {
         Animate-Intro
         # auto-setup na primeira execução se ~/.ssh/config não tem alias
@@ -462,7 +543,11 @@ switch ($Action) {
                 $needSetup = $false
             }
         }
-        if ($needSetup) { Setup-SSH; Pause-Return }
+        if ($needSetup) {
+            Setup-SSH
+            if (-not $script:SetupOk) { exit 1 }
+            Pause-Return
+        }
         Menu-Loop
     }
 }

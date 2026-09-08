@@ -6,7 +6,13 @@
 set -o pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-FISHELL_VERSION="2.1"
+FISHELL_VERSION="2.2"
+
+# Defaults sobrescritos por config.sh em load_config(). Ficam aqui, e não
+# só lá dentro, porque o banner é desenhado antes de a config ser lida.
+NPAD_HOST="sc2.npad.ufrn.br"
+NPAD_PORT="4422"
+SSH_ALIAS="npad"
 
 # ─── Paleta "terminal hacker" (verde matrix) ──────────────────
 if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
@@ -111,7 +117,7 @@ draw_logo_scene() {
 
 print_info_line() {
     printf '%b  » npad/ufrn secure access terminal  ::  v%s%b\n' "$G_DIM" "$FISHELL_VERSION" "$C_RESET"
-    printf '%b  » target: sc2.npad.ufrn.br:4422       ::  imd/ufrn%b\n\n' "$G_DIM" "$C_RESET"
+    printf '%b  » target: %-28s::  imd/ufrn%b\n\n' "$G_DIM" "$NPAD_HOST:$NPAD_PORT" "$C_RESET"
 }
 
 # Logo estático — usado em cada redraw do menu (não anima).
@@ -127,7 +133,9 @@ print_logo() {
 menu_prompt_read() {
     local _var="$1"
     if [[ "${FISHELL_NOANIM:-0}" == "1" || ! -t 0 || ! -t 1 ]]; then
-        read -r "$_var"
+        # EOF (stdin fechado/pipe): devolve '0' pra sair em vez de loopar.
+        # shellcheck disable=SC2229  # atribuição indireta é intencional aqui
+        read -r "$_var" || printf -v "$_var" '0'
         return
     fi
     printf '\0337'   # DECSC: salva posição do cursor (no prompt)
@@ -308,7 +316,7 @@ EOF
     rm -f "$tmp_block"
 
     printf '\n'
-    log_ok "payload ready. connect with: %bssh %s%b\n" "$G_BRIGHT$C_BOLD" "$SSH_ALIAS" "$C_RESET"
+    log_ok "payload ready. connect with: ${G_BRIGHT}${C_BOLD}ssh ${SSH_ALIAS}${C_RESET}"
 }
 
 test_connection() {
@@ -362,11 +370,13 @@ action_download() {
 
 action_run_remote() {
     log_step "remote exec // $SSH_ALIAS"
-    local cmd
-    # Prompt separado do read (ANSI escapes em read -rp confundem o readline).
-    printf '  %b>%b cmd : ' "$G" "$C_RESET"
-    read -r cmd
-    [[ -z "$cmd" ]] && { log_warn "empty command, aborted."; return; }
+    local cmd="$*"
+    if [[ -z "$cmd" ]]; then
+        # Prompt separado do read (ANSI escapes em read -rp confundem o readline).
+        printf '  %b>%b cmd : ' "$G" "$C_RESET"
+        read -r cmd
+    fi
+    [[ -z "$cmd" ]] && { log_warn "empty command, aborted."; return 1; }
     # Reseta estado do terminal (o loop de animação do menu pode ter deixado
     # o tty em modo não-canônico). Sem isso, algumas linhas do output remoto
     # chegam com o primeiro char corrompido.
@@ -377,6 +387,43 @@ action_run_remote() {
     # erros de escrita em stderr).
     ssh -T "$SSH_ALIAS" "$cmd"
     printf '%b─── end ─────────────%b\n' "$G_DIM" "$C_RESET"
+}
+
+action_keygen() {
+    log_step "generating ssh keypair in $SSH_KEYS_DIR"
+    local key="$SSH_KEYS_DIR/id_rsa"
+    if [[ -f "$key" ]]; then
+        log_warn "keypair already exists: $key"
+        log_info "remove it by hand first if you really want a new one."
+        return 1
+    fi
+    mkdir -p "$SSH_KEYS_DIR"
+    chmod 700 "$SSH_KEYS_DIR"
+    stty sane 2>/dev/null || true
+    if ! ssh-keygen -t rsa -b 4096 -N '' -C "${NPAD_USER}@fishell" -f "$key" >/dev/null; then
+        log_err "ssh-keygen failed"
+        return 1
+    fi
+    chmod 600 "$key"
+    chmod 644 "$key.pub"
+    log_ok "keypair created -> $key"
+    printf '\n%b  append this public key to %s@%s:~/.ssh/authorized_keys%b\n\n' \
+        "$G_DIM" "$NPAD_USER" "$NPAD_HOST" "$C_RESET"
+    printf '%b%s%b\n\n' "$G_BRIGHT" "$(cat "$key.pub")" "$C_RESET"
+    log_info "then run: ./fishell.sh setup"
+}
+
+# Remove a host key do NPAD do ~/.ssh/known_hosts — conserta o erro
+# "Host key verification failed" depois que o servidor troca de chave.
+action_forget_hostkey() {
+    log_step "clearing host key for [$NPAD_HOST]:$NPAD_PORT"
+    stty sane 2>/dev/null || true
+    if ssh-keygen -R "[$NPAD_HOST]:$NPAD_PORT" >/dev/null 2>&1; then
+        log_ok "entry removed from ~/.ssh/known_hosts"
+        log_info "next connection will ask to confirm the new fingerprint."
+    else
+        log_warn "nothing removed (no matching entry in known_hosts)"
+    fi
 }
 
 show_status() {
@@ -404,8 +451,16 @@ ${G_BRIGHT}COMMANDS${C_RESET}
   ${G}test${C_RESET}       probe connection (no shell)
   ${G}upload${C_RESET}     scp file/folder to npad (interactive)
   ${G}download${C_RESET}   scp file/folder from npad (interactive)
+  ${G}run${C_RESET} <cmd>  run one command on npad and print the output
+  ${G}keygen${C_RESET}     generate a new keypair in the keys dir
+  ${G}forget${C_RESET}     drop the npad host key from known_hosts
   ${G}status${C_RESET}     show current configuration
   ${G}help${C_RESET}       display this panel
+
+${G_BRIGHT}CONTROL PANEL${C_RESET}
+  ${G}1${C_RESET} shell   ${G}2${C_RESET} test   ${G}3${C_RESET} upload   ${G}4${C_RESET} download   ${G}5${C_RESET} run
+  ${G}6${C_RESET} setup   ${G}7${C_RESET} status ${G}8${C_RESET} keygen   ${G}9${C_RESET} forget
+  ${G}a${C_RESET} toggle animation      ${G}0${C_RESET}/${G}q${C_RESET} exit
 
 ${G_BRIGHT}ENV${C_RESET}
   ${GRAY}FISHELL_NOANIM=1${C_RESET}   disable typewriter/boot animation
@@ -469,6 +524,8 @@ menu() {
         _row "$YEL" "[5]" "exec remote command"  "( one-shot )"
         _row "$YEL" "[6]" "redeploy ssh payload" "( re-setup )"
         _row "$YEL" "[7]" "system readout"       "( status )"
+        _row "$YEL" "[8]" "generate keypair"     "( ssh-keygen )"
+        _row "$YEL" "[9]" "forget host key"      "( known_hosts )"
         local _anim_label _anim_color
         if [[ "${FISHELL_NOANIM:-0}" == "1" ]]; then
             _anim_label="off"; _anim_color="$G_DIM"
@@ -487,7 +544,10 @@ menu() {
         _row "$RED" "[0]" "logout"               "( exit )"
         printf '%b╚══════════════════════════════════════════════════╝%b\n' "$G" "$C_RESET"
         local opt
-        printf '\n%bfishell%b@%bnpad%b:%b~%b%b#%b ' "$G_BRIGHT" "$C_RESET" "$CYA" "$C_RESET" "$G_DIM" "$C_RESET" "$G_BRIGHT" "$C_RESET"
+        # Prompt pede a opção em vez de imitar um shell: um "fishell@npad:~#"
+        # dá a impressão de que dá pra digitar comando ali.
+        printf '\n  %b>%b %bselect option%b %b[1-9, a, 0]%b : ' \
+            "$G" "$C_RESET" "$G_BRIGHT" "$C_RESET" "$G_DIM" "$C_RESET"
         menu_prompt_read opt
         clear 2>/dev/null || true
         print_logo
@@ -499,6 +559,8 @@ menu() {
             5|05) action_run_remote; pause_return ;;
             6|06) setup_ssh;        pause_return ;;
             7|07) show_status;      pause_return ;;
+            8|08) action_keygen;     pause_return ;;
+            9|09) action_forget_hostkey; pause_return ;;
             a|A)
                 if [[ "${FISHELL_NOANIM:-0}" == "1" ]]; then
                     export FISHELL_NOANIM=0
@@ -535,10 +597,14 @@ main() {
         test)     test_connection ;;
         upload)   action_upload ;;
         download) action_download ;;
+        run)      shift; action_run_remote "$@" ;;
+        keygen)   action_keygen ;;
+        forget)   action_forget_hostkey ;;
         status)   show_status ;;
         menu)
             if ! grep -q "^Host $SSH_ALIAS\$" "$HOME/.ssh/config" 2>/dev/null; then
                 setup_ssh || exit 1
+                pause_return
             fi
             menu
             ;;
