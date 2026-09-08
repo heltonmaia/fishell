@@ -6,7 +6,10 @@
 set -o pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-FISHELL_VERSION="2.2"
+# O codigo vive em src/bash/, mas config.sh e .ssh/ sao do usuario e ficam na
+# raiz do repo — dois niveis acima.
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+FISHELL_VERSION="2.3"
 
 # Defaults sobrescritos por config.sh em load_config(). Ficam aqui, e não
 # só lá dentro, porque o banner é desenhado antes de a config ser lida.
@@ -194,19 +197,19 @@ boot_sequence() {
 
 # ─── Carrega configuração ─────────────────────────────────────
 load_config() {
-    local cfg="$SCRIPT_DIR/config.sh"
-    local example="$SCRIPT_DIR/config.sh.example"
+    local cfg="$REPO_ROOT/config.sh"
+    local example="$REPO_ROOT/config/config.sh.example"
 
     if [[ ! -f "$cfg" ]]; then
         log_warn "configuration file not found: $cfg"
         if [[ -f "$example" ]]; then
-            log_info "copying template from config.sh.example..."
+            log_info "copying template from config/config.sh.example..."
             cp "$example" "$cfg"
             log_warn "edit $cfg and set NPAD_USER before running again."
             printf '\n  %b$%b nano %s\n\n' "$G" "$C_RESET" "$cfg"
             exit 1
         else
-            log_err "template config.sh.example missing too. aborting."
+            log_err "template config/config.sh.example missing too. aborting."
             exit 1
         fi
     fi
@@ -229,7 +232,7 @@ load_config() {
         if [[ -d "/content/drive/MyDrive/visaocomputacional/.ssh" ]]; then
             SSH_KEYS_DIR="/content/drive/MyDrive/visaocomputacional/.ssh"
         else
-            SSH_KEYS_DIR="$SCRIPT_DIR/.ssh"
+            SSH_KEYS_DIR="$REPO_ROOT/.ssh"
         fi
     fi
 }
@@ -414,7 +417,7 @@ action_keygen() {
     printf '\n%b  append this public key to %s@%s:~/.ssh/authorized_keys%b\n\n' \
         "$G_DIM" "$NPAD_USER" "$NPAD_HOST" "$C_RESET"
     printf '%b%s%b\n\n' "$G_BRIGHT" "$(cat "$key.pub")" "$C_RESET"
-    log_info "then run: ./fishell.sh setup"
+    log_info "then run: ./bin/fishell.sh setup"
 }
 
 # Remove a host key do NPAD do ~/.ssh/known_hosts — conserta o erro
@@ -446,7 +449,7 @@ show_help() {
     cat <<EOF
 
 ${G_BRIGHT}USAGE${C_RESET}
-  ${G}\$${C_RESET} ./fishell.sh [command]
+  ${G}\$${C_RESET} ./bin/fishell.sh [command]
 
 ${G_BRIGHT}COMMANDS${C_RESET}
   ${G}(none)${C_RESET}     launch interactive control panel
@@ -471,7 +474,7 @@ ${G_BRIGHT}ENV${C_RESET}
   ${GRAY}NO_COLOR=1${C_RESET}         disable ansi colors
 
 ${G_BRIGHT}CONFIG${C_RESET}
-  edit ${G}config.sh${C_RESET} (created from config.sh.example on first run)
+  edit ${G}config.sh${C_RESET} (created from config/config.sh.example on first run)
 
 EOF
 }

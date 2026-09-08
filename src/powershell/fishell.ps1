@@ -27,8 +27,11 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$FishellVersion = '2.2'
+$FishellVersion = '2.3'
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+# O codigo vive em src/powershell/, mas config.ps1 e .ssh/ sao do usuario e
+# ficam na raiz do repo — dois niveis acima.
+$RepoRoot = Split-Path -Parent (Split-Path -Parent $ScriptDir)
 
 # UTF-8 no console pra Unicode (blocos, box drawing, ·, °).
 try {
@@ -69,12 +72,12 @@ $script:SSH_KEYS_DIR = ''
 $script:SetupOk = $false
 
 function Load-Config {
-    $cfg = Join-Path $ScriptDir 'config.ps1'
-    $example = Join-Path $ScriptDir 'config.ps1.example'
+    $cfg = Join-Path $RepoRoot 'config.ps1'
+    $example = Join-Path (Join-Path $RepoRoot 'config') 'config.ps1.example'
     if (-not (Test-Path $cfg)) {
         Log-Warn "configuration file not found: $cfg"
         if (Test-Path $example) {
-            Log-Info "copying template from config.ps1.example..."
+            Log-Info "copying template from config/config.ps1.example..."
             Copy-Item $example $cfg
             Log-Warn "edit $cfg and set `$NPAD_USER before running again."
             Write-Line ""
@@ -82,7 +85,7 @@ function Load-Config {
             Write-Line ""
             exit 1
         } else {
-            Log-Err "template config.ps1.example missing too. aborting."
+            Log-Err "template config/config.ps1.example missing too. aborting."
             exit 1
         }
     }
@@ -97,7 +100,7 @@ function Load-Config {
     if ($NPAD_PORT) { $script:NPAD_PORT = $NPAD_PORT }
     if ($SSH_ALIAS) { $script:SSH_ALIAS = $SSH_ALIAS }
     if ([string]::IsNullOrWhiteSpace($SSH_KEYS_DIR)) {
-        $script:SSH_KEYS_DIR = Join-Path $ScriptDir '.ssh'
+        $script:SSH_KEYS_DIR = Join-Path $RepoRoot '.ssh'
     } else {
         $script:SSH_KEYS_DIR = $SSH_KEYS_DIR
     }
@@ -182,7 +185,7 @@ function Setup-SSH {
     if (-not $priv) {
         Log-Err "private key not found in $($script:SSH_KEYS_DIR)"
         Log-Info "expected: id_rsa (or id_rsa.txt)"
-        Log-Info "run '.\fishell.ps1 keygen' to create one"
+        Log-Info "run 'bin\fishell.cmd keygen' to create one"
         return
     }
     $dstPriv = Join-Path $homeSsh 'id_rsa'
@@ -338,7 +341,7 @@ function Action-Keygen {
     Write-Line "${GD}  append this public key to $($script:NPAD_USER)@$($script:NPAD_HOST):~/.ssh/authorized_keys${R}"
     Write-Line ""
     Write-Line "${GB}$(Get-Content "$key.pub" -Raw)${R}"
-    Log-Info "then run: .\fishell.ps1 setup"
+    Log-Info "then run: bin\fishell.cmd setup"
 }
 
 # Remove a host key do NPAD do ~/.ssh/known_hosts — conserta o erro
@@ -371,8 +374,8 @@ function Show-Help {
 @"
 
 ${GB}USAGE${R}
-  ${G}PS>${R} .\fishell.ps1 [command]
-  ${G}cmd>${R} fishell.cmd [command]
+  ${G}cmd>${R} bin\fishell.cmd [command]
+  ${G}PS>${R}  .\src\powershell\fishell.ps1 [command]
 
 ${GB}COMMANDS${R}
   ${G}(none)${R}     launch interactive control panel
@@ -397,7 +400,7 @@ ${GB}ENV${R}
   ${GRAY}NO_COLOR=1${R}         disable ansi colors
 
 ${GB}CONFIG${R}
-  edit ${G}config.ps1${R} (created from config.ps1.example on first run)
+  edit ${G}config.ps1${R} (created from config/config.ps1.example on first run)
 
 "@ | Write-Host
 }

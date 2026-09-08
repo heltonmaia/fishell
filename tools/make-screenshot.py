@@ -45,14 +45,14 @@ def capture():
         work = os.path.join(tmp, "fishell")
         shutil.copytree(REPO, work, ignore=shutil.ignore_patterns(".git", ".ssh"))
         cfg = os.path.join(work, "config.sh")
-        with open(os.path.join(work, "config.sh.example"), encoding="utf-8") as f:
+        with open(os.path.join(work, "config", "config.sh.example"), encoding="utf-8") as f:
             conf = f.read().replace('NPAD_USER="seu_usuario_aqui"', 'NPAD_USER="usuario"')
         with open(cfg, "w", encoding="utf-8") as f:
             f.write(conf)
         # script(1) dá um pty ao filho — sem isso o fishell desliga as cores.
         # FISHELL_NOANIM=1 é obrigatório: com animação o menu nunca vê o EOF.
         out = subprocess.run(
-            ["script", "-qec", "FISHELL_NOANIM=1 ./fishell.sh", "/dev/null"],
+            ["script", "-qec", "FISHELL_NOANIM=1 ./bin/fishell.sh", "/dev/null"],
             cwd=work, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT, timeout=60,
         ).stdout.decode("utf-8", "replace")
@@ -127,6 +127,6 @@ def render(lines, out):
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("-o", "--out", default=os.path.join(REPO, "screenshot.png"))
+    ap.add_argument("-o", "--out", default=os.path.join(REPO, "docs", "screenshot.png"))
     args = ap.parse_args()
     render(parse(capture()), args.out)

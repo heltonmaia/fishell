@@ -14,22 +14,22 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: sintaxe (bash -n)
-        run: bash -n fishell.sh
+        run: bash -n src/bash/fishell.sh
 
       - name: help roda sem config.sh
         run: |
           test ! -f config.sh
-          FISHELL_NOANIM=1 NO_COLOR=1 ./fishell.sh help | grep -q 'CONTROL PANEL'
+          FISHELL_NOANIM=1 NO_COLOR=1 ./bin/fishell.sh help | grep -q 'CONTROL PANEL'
 
       - name: shellcheck (bloqueia em erros)
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq shellcheck
-          shellcheck --severity=error fishell.sh
+          shellcheck --severity=error src/bash/fishell.sh bin/fishell.sh
 
       - name: shellcheck completo (informativo)
         continue-on-error: true
-        run: shellcheck fishell.sh
+        run: shellcheck src/bash/fishell.sh bin/fishell.sh
 
       # O runner não tem .ssh/ (é gitignored), então o setup automático do
       # menu falharia e o painel nunca chegaria a ser desenhado.
@@ -38,10 +38,10 @@ jobs:
           FISHELL_NOANIM: '1'
           NO_COLOR: '1'
         run: |
-          cp config.sh.example config.sh
+          cp config/config.sh.example config.sh
           sed -i 's/seu_usuario_aqui/ci_user/' config.sh
-          ./fishell.sh keygen
-          ./fishell.sh setup
+          ./bin/fishell.sh keygen
+          ./bin/fishell.sh setup
           grep -q '^Host npad$' ~/.ssh/config
 
       # Regressão do bug que o BOM ausente causava no Windows: as sentinelas
@@ -51,8 +51,8 @@ jobs:
           FISHELL_NOANIM: '1'
           NO_COLOR: '1'
         run: |
-          ./fishell.sh setup >/dev/null
-          ./fishell.sh setup >/dev/null
+          ./bin/fishell.sh setup >/dev/null
+          ./bin/fishell.sh setup >/dev/null
           n=$(grep -c '# ── fishell: begin ──' ~/.ssh/config || true)
           test "$n" = "1" || { echo "bloco duplicado ($n ocorrências)"; cat ~/.ssh/config; exit 1; }
           b=$(awk 'NF{exit} {c++} END{print c+0}' ~/.ssh/config)
@@ -60,7 +60,7 @@ jobs:
 
       - name: painel desenha, fecha e mantém as 50 colunas
         run: |
-          FISHELL_NOANIM=1 NO_COLOR=1 timeout 30 ./fishell.sh </dev/null >panel.txt
+          FISHELL_NOANIM=1 NO_COLOR=1 timeout 30 ./bin/fishell.sh </dev/null >panel.txt
           grep -q 'session terminated' panel.txt
           python3 .github/scripts/check_panel.py <panel.txt
 
@@ -74,7 +74,7 @@ jobs:
       # Unicode — inclusive as sentinelas do bloco no ~/.ssh/config.
       - name: BOM UTF-8 obrigatório
         run: |
-          if [ "$(head -c 3 fishell.ps1 | od -An -tx1 | tr -d ' \n')" != "efbbbf" ]; then
+          if [ "$(head -c 3 src/powershell/fishell.ps1 | od -An -tx1 | tr -d ' \n')" != "efbbbf" ]; then
             echo "ERRO: fishell.ps1 precisa estar em UTF-8 COM BOM"
             exit 1
           fi
@@ -97,16 +97,24 @@ jobs:
       # barato de que uma mudança não foi aplicada só de um lado.
       - name: versão igual nos dois ports
         run: |
-          sh_v=$(sed -n 's/^FISHELL_VERSION="\(.*\)"$/\1/p' fishell.sh)
-          ps_v=$(sed -n "s/^\$FishellVersion = '\(.*\)'\$/\1/p" fishell.ps1)
+          sh_v=$(sed -n 's/^FISHELL_VERSION="\(.*\)"$/\1/p' src/bash/fishell.sh)
+          ps_v=$(sed -n "s/^\$FishellVersion = '\(.*\)'\$/\1/p" src/powershell/fishell.ps1)
           echo "sh=$sh_v  ps1=$ps_v"
           test -n "$sh_v"
           test "$sh_v" = "$ps_v"
 
+      - name: wrappers de bin/ apontam para arquivos existentes
+        run: |
+          test -x bin/fishell.sh
+          test -f src/bash/fishell.sh
+          grep -q 'src\\powershell\\fishell.ps1' bin/fishell.cmd
+          test -f src/powershell/fishell.ps1
+          echo "wrappers ok"
+
       - name: mesmos subcomandos nos dois ports
         run: |
           for c in setup login test upload download run keygen forget status help; do
-            grep -qE "^ +$c[|)]" fishell.sh || { echo "falta '$c' no fishell.sh"; exit 1; }
-            grep -q "'$c'" fishell.ps1     || { echo "falta '$c' no fishell.ps1"; exit 1; }
+            grep -qE "^ +$c[|)]" src/bash/fishell.sh || { echo "falta '$c' no fishell.sh"; exit 1; }
+            grep -q "'$c'" src/powershell/fishell.ps1     || { echo "falta '$c' no fishell.ps1"; exit 1; }
           done
           echo "subcomandos ok"

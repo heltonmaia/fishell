@@ -5,10 +5,29 @@ Copia as chaves, registra o alias `npad` e abre um painel interativo.
 
 [![ci](https://github.com/heltonmaia/fishell/actions/workflows/ci.yml/badge.svg)](https://github.com/heltonmaia/fishell/actions/workflows/ci.yml)
 
-- **Linux / macOS / WSL / Google Colab** → `fishell.sh` (Bash)
-- **Windows (PowerShell / cmd)** → `fishell.ps1` + `fishell.cmd` (launcher)
+- **Linux / macOS / WSL / Google Colab** → `./bin/fishell.sh` (Bash)
+- **Windows (PowerShell / cmd)** → `bin\fishell.cmd` (launcher do PowerShell)
 
-![fishell control panel](screenshot.png)
+![fishell control panel](docs/screenshot.png)
+
+---
+
+## Estrutura
+
+```
+bin/                     entrypoints
+  fishell.sh               Linux / macOS / WSL / Colab
+  fishell.cmd              Windows (chama o PowerShell sem mexer na ExecutionPolicy)
+src/
+  bash/fishell.sh          o programa, versão Bash
+  powershell/fishell.ps1   o programa, versão PowerShell
+config/                  templates (os *.example commitados)
+docs/screenshot.png
+tools/make-screenshot.py regenera o print do README a partir da UI real
+```
+
+`config.sh` / `config.ps1` (a sua config) e `.ssh/` (as suas chaves) ficam na
+**raiz** do repo — fora do `src/`, e bloqueados pelo `.gitignore`.
 
 ---
 
@@ -21,14 +40,14 @@ cd fishell
 # 1. Chaves SSH do NPAD vão em ./.ssh/
 mkdir -p .ssh
 cp ~/.ssh/id_rsa ~/.ssh/id_rsa.pub .ssh/
-#    (sem chave ainda? ./fishell.sh keygen gera o par pra você)
+#    (sem chave ainda? ./bin/fishell.sh keygen gera o par pra você)
 
 # 2. Configure seu usuário NPAD
-cp config.sh.example config.sh
+cp config/config.sh.example config.sh
 sed -i 's/seu_usuario_aqui/SEU_USER_NPAD/' config.sh
 
 # 3. Rode
-./fishell.sh
+./bin/fishell.sh
 ```
 
 Na primeira execução, o script detecta que o SSH não está configurado, faz o
@@ -52,14 +71,14 @@ copy $HOME\.ssh\id_rsa     .ssh\
 copy $HOME\.ssh\id_rsa.pub .ssh\
 
 # 2. Configure seu usuário NPAD
-Copy-Item config.ps1.example config.ps1
+Copy-Item config\config.ps1.example config.ps1
 notepad config.ps1   # edite $NPAD_USER
 
 # 3. Rode (use o launcher .cmd pra não precisar mexer na ExecutionPolicy)
-.\fishell.cmd
+.\bin\fishell.cmd
 ```
 
-Também aceita subcomando: `fishell.cmd setup | login | test | upload |
+Também aceita subcomando: `bin\fishell.cmd setup | login | test | upload |
 download | run | keygen | forget | status | help`.
 
 ---
@@ -88,17 +107,17 @@ ENTER):
 ## Comandos
 
 ```bash
-./fishell.sh                    # painel interativo
-./fishell.sh setup              # (re)configura o SSH
-./fishell.sh login              # conecta (= ssh npad)
-./fishell.sh test               # testa conexão
-./fishell.sh upload             # scp push (interativo)
-./fishell.sh download           # scp pull (interativo)
-./fishell.sh run "nvidia-smi"   # roda um comando no NPAD e imprime a saída
-./fishell.sh keygen             # gera um par de chaves novo
-./fishell.sh forget             # remove a host key do NPAD do known_hosts
-./fishell.sh status             # mostra configuração
-./fishell.sh help               # ajuda (funciona sem config.sh)
+./bin/fishell.sh                    # painel interativo
+./bin/fishell.sh setup              # (re)configura o SSH
+./bin/fishell.sh login              # conecta (= ssh npad)
+./bin/fishell.sh test               # testa conexão
+./bin/fishell.sh upload             # scp push (interativo)
+./bin/fishell.sh download           # scp pull (interativo)
+./bin/fishell.sh run "nvidia-smi"   # roda um comando no NPAD e imprime a saída
+./bin/fishell.sh keygen             # gera um par de chaves novo
+./bin/fishell.sh forget             # remove a host key do NPAD do known_hosts
+./bin/fishell.sh status             # mostra configuração
+./bin/fishell.sh help               # ajuda (funciona sem config.sh)
 ```
 
 Depois do `setup`, o alias fica no `~/.ssh/config` e você pode usar SSH direto
@@ -138,7 +157,7 @@ Host npad
 ```
 
 Rodar `setup` de novo **reescreve** esse bloco em vez de duplicá-lo — então
-mudar `NPAD_USER` ou `NPAD_PORT` no config e rodar `./fishell.sh setup` já
+mudar `NPAD_USER` ou `NPAD_PORT` no config e rodar `./bin/fishell.sh setup` já
 basta.
 
 Se você **já tinha** um `Host npad` no `~/.ssh/config` que não foi criado pelo
@@ -169,19 +188,19 @@ drive.mount('/content/drive')
 
 !git clone https://github.com/heltonmaia/fishell.git /content/fishell
 %cd /content/fishell
-!cp config.sh.example config.sh
+!cp config/config.sh.example config.sh
 !sed -i 's/seu_usuario_aqui/SEU_USER/' config.sh
-!bash fishell.sh setup
+!bash bin/fishell.sh setup
 ```
 
 O script detecta `/content/drive/MyDrive/visaocomputacional/.ssh`
-automaticamente quando `SSH_KEYS_DIR` está vazio. Rode `bash fishell.sh setup`
+automaticamente quando `SSH_KEYS_DIR` está vazio. Rode `bash bin/fishell.sh setup`
 sempre que a VM do Colab reiniciar.
 
 Para rodar algo no NPAD direto de uma célula, sem painel:
 
 ```python
-!bash fishell.sh run "sinfo -s"
+!bash bin/fishell.sh run "sinfo -s"
 ```
 
 ---
@@ -207,8 +226,8 @@ cd ~/fishell
 chmod 700 .ssh
 chmod 600 .ssh/id_rsa .ssh/known_hosts
 chmod 644 .ssh/id_rsa.pub
-chmod +x fishell.sh
-./fishell.sh
+chmod +x bin/fishell.sh src/bash/fishell.sh
+./bin/fishell.sh
 ```
 
 ---
@@ -218,27 +237,27 @@ chmod +x fishell.sh
 | Problema                          | Solução                                                             |
 | --------------------------------- | ------------------------------------------------------------------- |
 | `Permission denied (publickey)`   | Confirme `NPAD_USER` no `config.sh` e se a pub foi enviada ao NPAD  |
-| `chave privada não encontrada`    | `./fishell.sh keygen`, ou aponte `SSH_KEYS_DIR` para a pasta certa  |
-| `Host key verification failed`    | `./fishell.sh forget` e conecte de novo                             |
-| Timeout / conexão trava           | `./fishell.sh test` — se falhar, verifique firewall e porta 4422    |
+| `chave privada não encontrada`    | `./bin/fishell.sh keygen`, ou aponte `SSH_KEYS_DIR` para a pasta certa  |
+| `Host key verification failed`    | `./bin/fishell.sh forget` e conecte de novo                             |
+| Timeout / conexão trava           | `./bin/fishell.sh test` — se falhar, verifique firewall e porta 4422    |
 | Alias `npad` não foi registrado   | Já existia um `Host npad` seu no `~/.ssh/config` — veja a seção acima |
-| Banner/painel com lixo no Windows | `fishell.ps1` foi salvo sem BOM UTF-8, ou o terminal não é o Windows Terminal |
+| Banner/painel com lixo no Windows | `src/powershell/fishell.ps1` foi salvo sem BOM UTF-8, ou o terminal não é o Windows Terminal |
 
 ---
 
 ## Desenvolvimento
 
-Não há build nem dependências. Os dois ports (`fishell.sh` e `fishell.ps1`)
+Não há build nem dependências. Os dois ports (`src/bash/fishell.sh` e `src/powershell/fishell.ps1`)
 são escritos à mão em paralelo: **toda mudança de comportamento, texto de UI ou
 subcomando precisa entrar nos dois**, incluindo o número de versão.
 
 Antes de commitar:
 
 ```bash
-bash -n fishell.sh          # sintaxe
-shellcheck fishell.sh       # se disponível
+bash -n src/bash/fishell.sh              # sintaxe
+shellcheck src/bash/fishell.sh bin/fishell.sh   # se disponível
 
-FISHELL_NOANIM=1 NO_COLOR=1 ./fishell.sh </dev/null \
+FISHELL_NOANIM=1 NO_COLOR=1 ./bin/fishell.sh </dev/null \
   | python3 .github/scripts/check_panel.py    # a caixa do painel tem 50 colunas
 ```
 
@@ -252,7 +271,7 @@ UI real, não tirado à mão:
 python3 tools/make-screenshot.py     # precisa de Pillow + fonts-dejavu-core
 ```
 
-**`fishell.ps1` precisa continuar salvo em UTF-8 com BOM.** O Windows
+**`src/powershell/fishell.ps1` precisa continuar salvo em UTF-8 com BOM.** O Windows
 PowerShell 5.1 lê `.ps1` sem BOM como ANSI/Windows-1252, o que destrói o banner,
 as bordas do painel e as sentinelas do bloco no `~/.ssh/config` — fazendo cada
 `setup` duplicar o bloco. O CI bloqueia se o BOM sumir.
@@ -263,7 +282,7 @@ as bordas do painel e as sentinelas do bloco no `~/.ssh/config` — fazendo cada
 
 `.ssh/`, `config.sh`, `config.ps1`, `*.zip`, `*.pem`, `*.key` estão no
 `.gitignore` — **nunca** serão commitados. Se suspeitar de vazamento, gere um
-novo par com `./fishell.sh keygen` e atualize a pub no NPAD.
+novo par com `./bin/fishell.sh keygen` e atualize a pub no NPAD.
 
 ---
 
