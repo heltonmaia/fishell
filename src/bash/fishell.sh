@@ -9,7 +9,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # O codigo vive em src/bash/, mas config.sh e .ssh/ sao do usuario e ficam na
 # raiz do repo — dois niveis acima.
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-FISHELL_VERSION="2.3"
+FISHELL_VERSION="2.4"
+
+# Idioma escolhido pelo ambiente vence o do config.sh; guardado antes de
+# sourcear a config justamente pra poder reaplicar depois.
+FISHELL_LANG_ENV="${FISHELL_LANG:-}"
 
 # Defaults sobrescritos por config.sh em load_config(). Ficam aqui, e não
 # só lá dentro, porque o banner é desenhado antes de a config ser lida.
@@ -47,6 +51,140 @@ log_warn()  { printf '%b[!]%b %s\n' "$YEL"        "$C_RESET" "$*"; }
 log_err()   { printf '%b[x]%b %s\n' "$RED"        "$C_RESET" "$*" >&2; }
 log_step()  { printf '\n%b[»]%b %b%s%b\n' "$G"    "$C_RESET" "$C_BOLD" "$*" "$C_RESET"; }
 log_work()  { printf '%b[~]%b %s\n' "$G_DIM"      "$C_RESET" "$*"; }
+
+# ─── Largura visível ──────────────────────────────────────────
+# Conta code points removendo os bytes de continuação UTF-8 (0x80-0xBF).
+# Necessário porque printf '%-20s' preenche por BYTE, e com LC_ALL=C até o
+# ${#s} do bash conta bytes — qualquer acento desalinharia o painel de 50
+# colunas. Este cálculo dá o mesmo resultado em qualquer locale.
+vlen() {
+    local s="${1//[$'\x80'-$'\xBF']/}"
+    printf '%s' "${#s}"
+}
+
+# Preenche $2 com espaços até $1 colunas.
+pad() {
+    local w="$1" s="$2" n
+    n=$(vlen "$s")
+    (( n >= w )) && { printf '%s' "$s"; return; }
+    printf '%s%*s' "$s" "$((w - n))" ""
+}
+
+# ─── i18n ─────────────────────────────────────────────────────
+# FISHELL_LANG=pt|en (padrão pt). Vem do ambiente ou do config.sh, e pode ser
+# trocado em runtime pela tecla [l] do menu.
+# Regra do painel: L_M*_T no máximo 20 colunas, L_M*_H no máximo 16.
+set_lang() {
+    case "${FISHELL_LANG:-pt}" in
+      en)
+        FISHELL_LANG=en
+        L_TAGLINE="npad/ufrn secure access terminal"; L_TARGET="target"
+        L_BOOT1="loading fishell runtime..."; L_BOOT2="scanning local environment..."
+        L_BOOT3="checking credentials path...";  L_BOOT4="ready."
+        L_HDR_TYPE="type"; L_HDR_OR="or"; L_HDR_EXIT="to exit"
+        L_PANEL="CONTROL PANEL"
+        L_M1_T="open secure shell";    L_M1_H="( ssh npad )"
+        L_M2_T="probe connection";     L_M2_H="( dry-run test )"
+        L_M3_T="upload payload";       L_M3_H="( scp push )"
+        L_M4_T="download payload";     L_M4_H="( scp pull )"
+        L_M5_T="exec remote command";  L_M5_H="( one-shot )"
+        L_M6_T="redeploy ssh payload"; L_M6_H="( re-setup )"
+        L_M7_T="system readout";       L_M7_H="( status )"
+        L_M8_T="generate keypair";     L_M8_H="( ssh-keygen )"
+        L_ML_T="language";             L_MA_T="toggle animation"
+        L_M0_T="logout";               L_M0_H="( exit )"
+        L_PROMPT="select option"
+        L_PAUSE="press %bENTER%b to return to control panel... "
+        L_INVALID="invalid opcode:"; L_BYE="session terminated."; L_BYE2="goodbye."
+        L_ANIM="animation:"; L_LANGSET="language:"; L_ON="on"; L_OFF="off"
+        L_CFG_NOTFOUND="configuration file not found:"
+        L_CFG_COPY="copying template from config/config.sh.example..."
+        L_CFG_EDIT="edit %s and set NPAD_USER before running again."
+        L_CFG_NOTEMPLATE="template config/config.sh.example missing too. aborting."
+        L_CFG_PLACEHOLDER="NPAD_USER is still the default placeholder."
+        L_CFG_EDITPATH="edit:"
+        L_SETUP_INIT="initializing ssh payload for user"
+        L_KEYS_NOTFOUND="keys directory not found:"; L_KEYS_CHECK="check SSH_KEYS_DIR in config.sh"
+        L_PRIV_NOTFOUND="private key not found in"; L_PRIV_EXPECT="expected: id_rsa (or id_rsa.txt)"
+        L_PRIV_KEYGEN="run './bin/fishell.sh keygen' to create one"
+        L_PRIV_OK="private key deployed -> ~/.ssh/id_rsa"
+        L_PUB_OK="public key deployed -> ~/.ssh/id_rsa.pub"; L_KH_OK="known_hosts deployed"
+        L_ALIAS_UPD="updated in ~/.ssh/config"; L_ALIAS_REG="registered in ~/.ssh/config"
+        L_ALIAS_KEPT="exists in ~/.ssh/config but was not created by fishell — kept as is"
+        L_READY="payload ready. connect with:"
+        L_PROBE="probing target"; L_HANDSHAKE="dispatching handshake (10s timeout)..."
+        L_TUNNEL_OK="tunnel established ::"; L_HANDSHAKE_FAIL="handshake failed. verify user, key, network."
+        L_OPEN_SHELL="opening secure shell to"; L_EXIT_HINT="(type 'exit' to return to the control panel)"
+        L_UPLOAD_STEP="upload // local -> npad"; L_DOWNLOAD_STEP="download // npad -> local"
+        L_LOCAL_PATH="local path"; L_REMOTE_PATH="remote path"
+        L_SRC_MISSING="does not exist"; L_TRANSFERRING="transferring..."
+        L_TRANSFER_OK="transfer complete"; L_TRANSFER_FAIL="transfer failed"
+        L_REMOTE_EXEC="remote exec //"; L_CMD="cmd"; L_EMPTY_CMD="empty command, aborted."
+        L_STDOUT_BEGIN="─── remote stdout ───"; L_STDOUT_END="─── end ─────────────"
+        L_KEYGEN_STEP="generating ssh keypair in"; L_KEY_EXISTS="keypair already exists:"
+        L_KEY_REMOVE="remove it by hand first if you really want a new one."
+        L_KEYGEN_FAIL="ssh-keygen failed"; L_KEY_CREATED="keypair created ->"
+        L_APPEND_PUB="append this public key to"; L_THEN_SETUP="then run: ./bin/fishell.sh setup"
+        L_STATUS_STEP="system readout"
+        L_ST_USER="USER"; L_ST_HOST="HOST"; L_ST_PORT="PORT"
+        L_ST_ALIAS="ALIAS"; L_ST_KEYS="KEYS_DIR"; L_ST_VERSION="VERSION"
+        ;;
+      *)
+        FISHELL_LANG=pt
+        L_TAGLINE="terminal de acesso ao npad/ufrn"; L_TARGET="alvo"
+        L_BOOT1="carregando o fishell..."; L_BOOT2="verificando o ambiente local..."
+        L_BOOT3="procurando as credenciais..."; L_BOOT4="pronto."
+        L_HDR_TYPE="tecle"; L_HDR_OR="ou"; L_HDR_EXIT="para sair"
+        L_PANEL="PAINEL DE CONTROLE"
+        L_M1_T="abrir shell seguro";  L_M1_H="( ssh npad )"
+        L_M2_T="testar conexão";      L_M2_H="( sem conectar )"
+        L_M3_T="enviar arquivos";     L_M3_H="( scp push )"
+        L_M4_T="baixar arquivos";     L_M4_H="( scp pull )"
+        L_M5_T="executar comando";    L_M5_H="( uma vez )"
+        L_M6_T="reinstalar chaves";   L_M6_H="( refazer )"
+        L_M7_T="ver configuração";    L_M7_H="( status )"
+        L_M8_T="gerar par de chaves"; L_M8_H="( ssh-keygen )"
+        L_ML_T="idioma";              L_MA_T="animação"
+        L_M0_T="sair";                L_M0_H="( exit )"
+        L_PROMPT="escolha uma opção"
+        L_PAUSE="tecle %bENTER%b para voltar ao painel... "
+        L_INVALID="opção inválida:"; L_BYE="sessão encerrada."; L_BYE2="até mais."
+        L_ANIM="animação:"; L_LANGSET="idioma:"; L_ON="on"; L_OFF="off"
+        L_CFG_NOTFOUND="arquivo de configuração não encontrado:"
+        L_CFG_COPY="copiando o modelo de config/config.sh.example..."
+        L_CFG_EDIT="edite %s e defina NPAD_USER antes de rodar de novo."
+        L_CFG_NOTEMPLATE="o modelo config/config.sh.example também não existe. abortando."
+        L_CFG_PLACEHOLDER="NPAD_USER ainda é o placeholder padrão."
+        L_CFG_EDITPATH="edite:"
+        L_SETUP_INIT="preparando o ssh para o usuário"
+        L_KEYS_NOTFOUND="pasta de chaves não encontrada:"; L_KEYS_CHECK="confira SSH_KEYS_DIR no config.sh"
+        L_PRIV_NOTFOUND="chave privada não encontrada em"; L_PRIV_EXPECT="esperado: id_rsa (ou id_rsa.txt)"
+        L_PRIV_KEYGEN="rode './bin/fishell.sh keygen' para gerar uma"
+        L_PRIV_OK="chave privada instalada -> ~/.ssh/id_rsa"
+        L_PUB_OK="chave pública instalada -> ~/.ssh/id_rsa.pub"; L_KH_OK="known_hosts instalado"
+        L_ALIAS_UPD="atualizado no ~/.ssh/config"; L_ALIAS_REG="registrado no ~/.ssh/config"
+        L_ALIAS_KEPT="já existe no ~/.ssh/config e não foi criado pelo fishell — mantido como está"
+        L_READY="tudo pronto. conecte com:"
+        L_PROBE="testando"; L_HANDSHAKE="enviando handshake (limite de 10s)..."
+        L_TUNNEL_OK="conexão estabelecida ::"; L_HANDSHAKE_FAIL="falhou. confira usuário, chave e rede."
+        L_OPEN_SHELL="abrindo shell em"; L_EXIT_HINT="(digite 'exit' para voltar ao painel)"
+        L_UPLOAD_STEP="envio // local -> npad"; L_DOWNLOAD_STEP="download // npad -> local"
+        L_LOCAL_PATH="caminho local"; L_REMOTE_PATH="caminho remoto"
+        L_SRC_MISSING="não existe"; L_TRANSFERRING="transferindo..."
+        L_TRANSFER_OK="transferência concluída"; L_TRANSFER_FAIL="a transferência falhou"
+        L_REMOTE_EXEC="comando remoto //"; L_CMD="comando"; L_EMPTY_CMD="comando vazio, cancelado."
+        L_STDOUT_BEGIN="─── saída remota ────"; L_STDOUT_END="─── fim ─────────────"
+        L_KEYGEN_STEP="gerando par de chaves em"; L_KEY_EXISTS="já existe um par de chaves:"
+        L_KEY_REMOVE="apague à mão primeiro se quiser mesmo gerar outro."
+        L_KEYGEN_FAIL="o ssh-keygen falhou"; L_KEY_CREATED="par de chaves criado ->"
+        L_APPEND_PUB="adicione esta chave pública em"; L_THEN_SETUP="depois rode: ./bin/fishell.sh setup"
+        L_STATUS_STEP="configuração atual"
+        L_ST_USER="USUÁRIO"; L_ST_HOST="HOST"; L_ST_PORT="PORTA"
+        L_ST_ALIAS="ALIAS"; L_ST_KEYS="CHAVES"; L_ST_VERSION="VERSÃO"
+        ;;
+    esac
+}
+set_lang
 
 # Typewriter — efeito opcional; desativado se FISHELL_NOANIM=1
 typewrite() {
@@ -119,8 +257,8 @@ draw_logo_scene() {
 }
 
 print_info_line() {
-    printf '%b  » npad/ufrn secure access terminal  ::  v%s%b\n' "$G_DIM" "$FISHELL_VERSION" "$C_RESET"
-    printf '%b  » target: %-28s::  imd/ufrn%b\n\n' "$G_DIM" "$NPAD_HOST:$NPAD_PORT" "$C_RESET"
+    printf '%b  » %s  ::  v%s%b\n' "$G_DIM" "$(pad 31 "$L_TAGLINE")" "$FISHELL_VERSION" "$C_RESET"
+    printf '%b  » %s: %s::  imd/ufrn%b\n\n' "$G_DIM" "$L_TARGET" "$(pad 28 "$NPAD_HOST:$NPAD_PORT")" "$C_RESET"
 }
 
 # Logo estático — usado em cada redraw do menu (não anima).
@@ -188,10 +326,10 @@ print_banner() {
 boot_sequence() {
     [[ "${FISHELL_NOANIM:-0}" == "1" || ! -t 1 ]] && return
     printf '%b' "$G_DIM"
-    typewrite "  [boot] loading fishell runtime..." 0.004
-    typewrite "  [boot] scanning local environment..." 0.004
-    typewrite "  [boot] checking credentials path..." 0.004
-    typewrite "  [boot] ready." 0.004
+    typewrite "  [boot] $L_BOOT1" 0.004
+    typewrite "  [boot] $L_BOOT2" 0.004
+    typewrite "  [boot] $L_BOOT3" 0.004
+    typewrite "  [boot] $L_BOOT4" 0.004
     printf '%b\n' "$C_RESET"
 }
 
@@ -201,15 +339,15 @@ load_config() {
     local example="$REPO_ROOT/config/config.sh.example"
 
     if [[ ! -f "$cfg" ]]; then
-        log_warn "configuration file not found: $cfg"
+        log_warn "$L_CFG_NOTFOUND $cfg"
         if [[ -f "$example" ]]; then
-            log_info "copying template from config/config.sh.example..."
+            log_info "$L_CFG_COPY"
             cp "$example" "$cfg"
-            log_warn "edit $cfg and set NPAD_USER before running again."
+            log_warn "$(printf "$L_CFG_EDIT" "$cfg")"
             printf '\n  %b$%b nano %s\n\n' "$G" "$C_RESET" "$cfg"
             exit 1
         else
-            log_err "template config/config.sh.example missing too. aborting."
+            log_err "$L_CFG_NOTEMPLATE"
             exit 1
         fi
     fi
@@ -222,9 +360,13 @@ load_config() {
     : "${NPAD_PORT:=4422}"
     : "${SSH_ALIAS:=npad}"
 
+    # Ambiente vence o config.sh; reaplica a tabela de strings depois.
+    [[ -n "$FISHELL_LANG_ENV" ]] && FISHELL_LANG="$FISHELL_LANG_ENV"
+    set_lang
+
     if [[ "$NPAD_USER" == "seu_usuario_aqui" ]]; then
-        log_err "NPAD_USER ainda é o placeholder padrão."
-        log_info "edite: $cfg"
+        log_err "$L_CFG_PLACEHOLDER"
+        log_info "$L_CFG_EDITPATH $cfg"
         exit 1
     fi
 
@@ -239,14 +381,14 @@ load_config() {
 
 # ─── Setup SSH ────────────────────────────────────────────────
 setup_ssh() {
-    log_step "initializing ssh payload for user '$NPAD_USER'"
+    log_step "$L_SETUP_INIT '$NPAD_USER'"
     local home_ssh="$HOME/.ssh"
     mkdir -p "$home_ssh"
     chmod 700 "$home_ssh"
 
     if [[ ! -d "$SSH_KEYS_DIR" ]]; then
-        log_err "keys directory not found: $SSH_KEYS_DIR"
-        log_info "check SSH_KEYS_DIR in config.sh"
+        log_err "$L_KEYS_NOTFOUND $SSH_KEYS_DIR"
+        log_info "$L_KEYS_CHECK"
         return 1
     fi
 
@@ -255,23 +397,24 @@ setup_ssh() {
         [[ -f "$cand" ]] && { priv="$cand"; break; }
     done
     if [[ -z "$priv" ]]; then
-        log_err "private key not found in $SSH_KEYS_DIR"
-        log_info "expected: id_rsa (or id_rsa.txt)"
+        log_err "$L_PRIV_NOTFOUND $SSH_KEYS_DIR"
+        log_info "$L_PRIV_EXPECT"
+        log_info "$L_PRIV_KEYGEN"
         return 1
     fi
 
     install -m 600 "$priv" "$home_ssh/id_rsa"
-    log_ok "private key deployed -> ~/.ssh/id_rsa"
+    log_ok "$L_PRIV_OK"
 
     if [[ -f "$SSH_KEYS_DIR/id_rsa.pub" ]]; then
         install -m 644 "$SSH_KEYS_DIR/id_rsa.pub" "$home_ssh/id_rsa.pub"
-        log_ok "public key deployed -> ~/.ssh/id_rsa.pub"
+        log_ok "$L_PUB_OK"
     fi
 
     for kh in "$SSH_KEYS_DIR/known_hosts" "$SSH_KEYS_DIR/known_hosts.txt"; do
         if [[ -f "$kh" ]]; then
             install -m 600 "$kh" "$home_ssh/known_hosts"
-            log_ok "known_hosts deployed"
+            log_ok "$L_KH_OK"
             break
         fi
     done
@@ -308,7 +451,7 @@ EOF
             cat "$tmp_block"
             echo "# ── fishell: end ──"
         } >> "$home_ssh/config"
-        log_ok "ssh alias '$SSH_ALIAS' updated in ~/.ssh/config"
+        log_ok "alias '$SSH_ALIAS' $L_ALIAS_UPD"
     elif ! grep -q "^Host $SSH_ALIAS\$" "$home_ssh/config" 2>/dev/null; then
         {
             echo ""
@@ -316,57 +459,57 @@ EOF
             cat "$tmp_block"
             echo "# ── fishell: end ──"
         } >> "$home_ssh/config"
-        log_ok "ssh alias '$SSH_ALIAS' registered in ~/.ssh/config"
+        log_ok "alias '$SSH_ALIAS' $L_ALIAS_REG"
     else
-        log_warn "alias '$SSH_ALIAS' exists in ~/.ssh/config but was not created by fishell — kept as is"
+        log_warn "alias '$SSH_ALIAS' $L_ALIAS_KEPT"
     fi
     rm -f "$tmp_block"
 
     printf '\n'
-    log_ok "payload ready. connect with: ${G_BRIGHT}${C_BOLD}ssh ${SSH_ALIAS}${C_RESET}"
+    log_ok "$L_READY ${G_BRIGHT}${C_BOLD}ssh ${SSH_ALIAS}${C_RESET}"
 }
 
 test_connection() {
-    log_step "probing target $NPAD_HOST:$NPAD_PORT"
-    log_work "dispatching handshake (10s timeout)..."
+    log_step "$L_PROBE $NPAD_HOST:$NPAD_PORT"
+    log_work "$L_HANDSHAKE"
     if ssh -o ConnectTimeout=10 -o BatchMode=yes "$SSH_ALIAS" true 2>/dev/null; then
-        log_ok "tunnel established :: $NPAD_USER@$NPAD_HOST"
+        log_ok "$L_TUNNEL_OK $NPAD_USER@$NPAD_HOST"
     else
-        log_err "handshake failed. verify user, key, network."
+        log_err "$L_HANDSHAKE_FAIL"
         return 1
     fi
 }
 
 action_login() {
-    log_step "opening secure shell to $SSH_ALIAS"
-    log_work "(type 'exit' to return to the control panel)"
+    log_step "$L_OPEN_SHELL $SSH_ALIAS"
+    log_work "$L_EXIT_HINT"
     ssh "$SSH_ALIAS"
 }
 
 action_upload() {
-    log_step "upload // local -> npad"
+    log_step "$L_UPLOAD_STEP"
     local src dst
-    printf '  %b>%b local path : ' "$G" "$C_RESET"
+    printf '  %b>%b %s : ' "$G" "$C_RESET" "$L_LOCAL_PATH"
     read -r src
-    printf '  %b>%b remote path [~/] : ' "$G" "$C_RESET"
+    printf '  %b>%b %s [~/] : ' "$G" "$C_RESET" "$L_REMOTE_PATH"
     read -r dst
     [[ -z "$dst" ]] && dst="~/"
     if [[ ! -e "$src" ]]; then
-        log_err "local path '$src' does not exist"
+        log_err "'$src' $L_SRC_MISSING"
         return 1
     fi
     stty sane 2>/dev/null || true
-    log_work "transferring..."
+    log_work "$L_TRANSFERRING"
     scp -P "$NPAD_PORT" -r "$src" "${SSH_ALIAS}:${dst}" \
-        && log_ok "transfer complete" || log_err "transfer failed"
+        && log_ok "$L_TRANSFER_OK" || log_err "$L_TRANSFER_FAIL"
 }
 
 action_download() {
-    log_step "download // npad -> local"
+    log_step "$L_DOWNLOAD_STEP"
     local src dst
-    printf '  %b>%b remote path : ' "$G" "$C_RESET"
+    printf '  %b>%b %s : ' "$G" "$C_RESET" "$L_REMOTE_PATH"
     read -r src
-    printf '  %b>%b local path  [./] : ' "$G" "$C_RESET"
+    printf '  %b>%b %s [./] : ' "$G" "$C_RESET" "$L_LOCAL_PATH"
     read -r dst
     [[ -z "$dst" ]] && dst="./"
     stty sane 2>/dev/null || true
@@ -376,77 +519,66 @@ action_download() {
 }
 
 action_run_remote() {
-    log_step "remote exec // $SSH_ALIAS"
+    log_step "$L_REMOTE_EXEC $SSH_ALIAS"
     local cmd="$*"
     if [[ -z "$cmd" ]]; then
         # Prompt separado do read (ANSI escapes em read -rp confundem o readline).
-        printf '  %b>%b cmd : ' "$G" "$C_RESET"
+        printf '  %b>%b %s : ' "$G" "$C_RESET" "$L_CMD"
         read -r cmd
     fi
-    [[ -z "$cmd" ]] && { log_warn "empty command, aborted."; return 1; }
+    [[ -z "$cmd" ]] && { log_warn "$L_EMPTY_CMD"; return 1; }
     # Reseta estado do terminal (o loop de animação do menu pode ter deixado
     # o tty em modo não-canônico). Sem isso, algumas linhas do output remoto
     # chegam com o primeiro char corrompido.
     stty sane 2>/dev/null || true
-    printf '%b─── remote stdout ───%b\n' "$G_DIM" "$C_RESET"
+    printf '%b%s%b\n' "$G_DIM" "$L_STDOUT_BEGIN" "$C_RESET"
     # -T: não aloca pseudo-tty (evita warning "stdin is not a tty" e reduz
     # chance de scripts server-side (/etc/profile, ~/.bashrc) produzirem
     # erros de escrita em stderr).
     ssh -T "$SSH_ALIAS" "$cmd"
-    printf '%b─── end ─────────────%b\n' "$G_DIM" "$C_RESET"
+    printf '%b%s%b\n' "$G_DIM" "$L_STDOUT_END" "$C_RESET"
 }
 
 action_keygen() {
-    log_step "generating ssh keypair in $SSH_KEYS_DIR"
+    log_step "$L_KEYGEN_STEP $SSH_KEYS_DIR"
     local key="$SSH_KEYS_DIR/id_rsa"
     if [[ -f "$key" ]]; then
-        log_warn "keypair already exists: $key"
-        log_info "remove it by hand first if you really want a new one."
+        log_warn "$L_KEY_EXISTS $key"
+        log_info "$L_KEY_REMOVE"
         return 1
     fi
     mkdir -p "$SSH_KEYS_DIR"
     chmod 700 "$SSH_KEYS_DIR"
     stty sane 2>/dev/null || true
     if ! ssh-keygen -t rsa -b 4096 -N '' -C "${NPAD_USER}@fishell" -f "$key" >/dev/null; then
-        log_err "ssh-keygen failed"
+        log_err "$L_KEYGEN_FAIL"
         return 1
     fi
     chmod 600 "$key"
     chmod 644 "$key.pub"
-    log_ok "keypair created -> $key"
-    printf '\n%b  append this public key to %s@%s:~/.ssh/authorized_keys%b\n\n' \
-        "$G_DIM" "$NPAD_USER" "$NPAD_HOST" "$C_RESET"
+    log_ok "$L_KEY_CREATED $key"
+    printf '\n%b  %s %s@%s:~/.ssh/authorized_keys%b\n\n' \
+        "$G_DIM" "$L_APPEND_PUB" "$NPAD_USER" "$NPAD_HOST" "$C_RESET"
     printf '%b%s%b\n\n' "$G_BRIGHT" "$(cat "$key.pub")" "$C_RESET"
-    log_info "then run: ./bin/fishell.sh setup"
-}
-
-# Remove a host key do NPAD do ~/.ssh/known_hosts — conserta o erro
-# "Host key verification failed" depois que o servidor troca de chave.
-action_forget_hostkey() {
-    log_step "clearing host key for [$NPAD_HOST]:$NPAD_PORT"
-    stty sane 2>/dev/null || true
-    if ssh-keygen -R "[$NPAD_HOST]:$NPAD_PORT" >/dev/null 2>&1; then
-        log_ok "entry removed from ~/.ssh/known_hosts"
-        log_info "next connection will ask to confirm the new fingerprint."
-    else
-        log_warn "nothing removed (no matching entry in known_hosts)"
-    fi
+    log_info "$L_THEN_SETUP"
 }
 
 show_status() {
-    log_step "system readout"
+    log_step "$L_STATUS_STEP"
     hline 50 ─
-    printf '  %bUSER      %b %s\n' "$G_BRIGHT" "$C_RESET" "$NPAD_USER"
-    printf '  %bHOST      %b %s\n' "$G_BRIGHT" "$C_RESET" "$NPAD_HOST"
-    printf '  %bPORT      %b %s\n' "$G_BRIGHT" "$C_RESET" "$NPAD_PORT"
-    printf '  %bALIAS     %b %s\n' "$G_BRIGHT" "$C_RESET" "$SSH_ALIAS"
-    printf '  %bKEYS_DIR  %b %s\n' "$G_BRIGHT" "$C_RESET" "$SSH_KEYS_DIR"
-    printf '  %bVERSION   %b fishell v%s\n' "$G_BRIGHT" "$C_RESET" "$FISHELL_VERSION"
+    _st() { printf '  %b%s%b %s\n' "$G_BRIGHT" "$(pad 10 "$1")" "$C_RESET" "$2"; }
+    _st "$L_ST_USER"    "$NPAD_USER"
+    _st "$L_ST_HOST"    "$NPAD_HOST"
+    _st "$L_ST_PORT"    "$NPAD_PORT"
+    _st "$L_ST_ALIAS"   "$SSH_ALIAS"
+    _st "$L_ST_KEYS"    "$SSH_KEYS_DIR"
+    _st "$L_ST_VERSION" "fishell v$FISHELL_VERSION"
     hline 50 ─
 }
 
 show_help() {
-    cat <<EOF
+    if [[ "$FISHELL_LANG" == "en" ]]; then
+        cat <<EOF
 
 ${G_BRIGHT}USAGE${C_RESET}
   ${G}\$${C_RESET} ./bin/fishell.sh [command]
@@ -460,38 +592,71 @@ ${G_BRIGHT}COMMANDS${C_RESET}
   ${G}download${C_RESET}   scp file/folder from npad (interactive)
   ${G}run${C_RESET} <cmd>  run one command on npad and print the output
   ${G}keygen${C_RESET}     generate a new keypair in the keys dir
-  ${G}forget${C_RESET}     drop the npad host key from known_hosts
   ${G}status${C_RESET}     show current configuration
   ${G}help${C_RESET}       display this panel
 
 ${G_BRIGHT}CONTROL PANEL${C_RESET}
-  ${G}1${C_RESET} shell   ${G}2${C_RESET} test   ${G}3${C_RESET} upload   ${G}4${C_RESET} download   ${G}5${C_RESET} run
-  ${G}6${C_RESET} setup   ${G}7${C_RESET} status ${G}8${C_RESET} keygen   ${G}9${C_RESET} forget
-  ${G}a${C_RESET} toggle animation      ${G}0${C_RESET}/${G}q${C_RESET} exit
+  ${G}1${C_RESET} shell    ${G}2${C_RESET} test     ${G}3${C_RESET} upload   ${G}4${C_RESET} download
+  ${G}5${C_RESET} run      ${G}6${C_RESET} setup    ${G}7${C_RESET} status   ${G}8${C_RESET} keygen
+  ${G}l${C_RESET} language         ${G}a${C_RESET} animation        ${G}0${C_RESET}/${G}q${C_RESET} exit
 
 ${G_BRIGHT}ENV${C_RESET}
-  ${GRAY}FISHELL_NOANIM=1${C_RESET}   disable typewriter/boot animation
-  ${GRAY}NO_COLOR=1${C_RESET}         disable ansi colors
+  ${GRAY}FISHELL_LANG=pt|en${C_RESET}  interface language (default: pt)
+  ${GRAY}FISHELL_NOANIM=1${C_RESET}    disable typewriter/boot animation
+  ${GRAY}NO_COLOR=1${C_RESET}          disable ansi colors
 
 ${G_BRIGHT}CONFIG${C_RESET}
   edit ${G}config.sh${C_RESET} (created from config/config.sh.example on first run)
 
 EOF
+    else
+        cat <<EOF
+
+${G_BRIGHT}USO${C_RESET}
+  ${G}\$${C_RESET} ./bin/fishell.sh [comando]
+
+${G_BRIGHT}COMANDOS${C_RESET}
+  ${G}(nenhum)${C_RESET}   abre o painel interativo
+  ${G}setup${C_RESET}      configura o ssh (copia as chaves + registra o alias)
+  ${G}login${C_RESET}      abre um shell no npad
+  ${G}test${C_RESET}       testa a conexão (sem abrir shell)
+  ${G}upload${C_RESET}     envia arquivo/pasta pro npad (interativo)
+  ${G}download${C_RESET}   baixa arquivo/pasta do npad (interativo)
+  ${G}run${C_RESET} <cmd>  roda um comando no npad e mostra a saída
+  ${G}keygen${C_RESET}     gera um par de chaves novo
+  ${G}status${C_RESET}     mostra a configuração atual
+  ${G}help${C_RESET}       mostra esta ajuda
+
+${G_BRIGHT}PAINEL${C_RESET}
+  ${G}1${C_RESET} shell    ${G}2${C_RESET} testar   ${G}3${C_RESET} enviar   ${G}4${C_RESET} baixar
+  ${G}5${C_RESET} comando  ${G}6${C_RESET} setup    ${G}7${C_RESET} config   ${G}8${C_RESET} chaves
+  ${G}l${C_RESET} idioma           ${G}a${C_RESET} animação         ${G}0${C_RESET}/${G}q${C_RESET} sair
+
+${G_BRIGHT}AMBIENTE${C_RESET}
+  ${GRAY}FISHELL_LANG=pt|en${C_RESET}  idioma da interface (padrão: pt)
+  ${GRAY}FISHELL_NOANIM=1${C_RESET}    desliga a animação
+  ${GRAY}NO_COLOR=1${C_RESET}          desliga as cores
+
+${G_BRIGHT}CONFIG${C_RESET}
+  edite ${G}config.sh${C_RESET} (criado a partir de config/config.sh.example)
+
+EOF
+    fi
 }
 
 pause_return() {
-    printf '\n%b[*]%b press %bENTER%b to return to control panel... ' "$G_DIM" "$C_RESET" "$G_BRIGHT" "$C_RESET"
+    printf "\n%b[*]%b $L_PAUSE" "$G_DIM" "$C_RESET" "$G_BRIGHT" "$C_RESET"
     read -r _ || true
 }
 
 menu_header() {
-    printf '%b  fishell v%s%b  %b::%b  %b%s@%s%b  %b::%b  type %b0%b or %bq%b to exit%b\n\n' \
+    printf '%b  fishell v%s%b  %b::%b  %b%s@%s%b  %b::%b  %s %b0%b %s %bq%b %s%b\n\n' \
         "$G_DIM" "$FISHELL_VERSION" "$C_RESET" \
         "$G" "$C_RESET" \
         "$G_BRIGHT" "$NPAD_USER" "$NPAD_HOST" "$C_RESET" \
-        "$G" "$C_RESET" \
-        "$G_BRIGHT" "$C_RESET" \
-        "$G_BRIGHT" "$C_RESET" "$C_RESET"
+        "$G" "$C_RESET" "$L_HDR_TYPE" \
+        "$G_BRIGHT" "$C_RESET" "$L_HDR_OR" \
+        "$G_BRIGHT" "$C_RESET" "$L_HDR_EXIT" "$C_RESET"
 }
 
 menu() {
@@ -508,53 +673,44 @@ menu() {
         #   "  [X]  <title:20> <hint:16>      " = 2+3+2+20+1+16+6 = 50
         _row() {
             local kc="$1" k="$2" title="$3" hint="$4"
-            printf '%b║%b  %b%s%b  %b%-20s%b %b%-16s%b      %b║%b\n' \
+            printf '%b║%b  %b%s%b  %b%s%b %b%s%b      %b║%b\n' \
                 "$G" "$C_RESET" \
                 "$kc" "$k" "$C_RESET" \
-                "$G_BRIGHT" "$title" "$C_RESET" \
-                "$CYA" "$hint" "$C_RESET" \
+                "$G_BRIGHT" "$(pad 20 "$title")" "$C_RESET" \
+                "$CYA" "$(pad 16 "$hint")" "$C_RESET" \
                 "$G" "$C_RESET"
         }
         printf '%b╔══════════════════════════════════════════════════╗%b\n' "$G" "$C_RESET"
         # Header: "   ░ CONTROL PANEL ░                              " = 3+1+1+13+1+1+30 = 50
-        printf '%b║%b   %b░%b %b%-13s%b %b░%b                              %b║%b\n' \
+        # 3 espaços + ░ + espaço + título + espaço + ░ + preenchimento = 50
+        local _fill=$(( 43 - $(vlen "$L_PANEL") ))
+        printf '%b║%b   %b░%b %b%s%b %b░%b%*s%b║%b\n' \
             "$G" "$C_RESET" \
             "$CYA" "$C_RESET" \
-            "$G_BRIGHT$C_BOLD" "CONTROL PANEL" "$C_RESET" \
+            "$G_BRIGHT$C_BOLD" "$L_PANEL" "$C_RESET" \
             "$CYA" "$C_RESET" \
+            "$_fill" "" \
             "$G" "$C_RESET"
         printf '%b╠══════════════════════════════════════════════════╣%b\n' "$G" "$C_RESET"
-        _row "$YEL" "[1]" "open secure shell"    "( ssh npad )"
-        _row "$YEL" "[2]" "probe connection"     "( dry-run test )"
-        _row "$YEL" "[3]" "upload payload"       "( scp push )"
-        _row "$YEL" "[4]" "download payload"     "( scp pull )"
-        _row "$YEL" "[5]" "exec remote command"  "( one-shot )"
-        _row "$YEL" "[6]" "redeploy ssh payload" "( re-setup )"
-        _row "$YEL" "[7]" "system readout"       "( status )"
-        _row "$YEL" "[8]" "generate keypair"     "( ssh-keygen )"
-        _row "$YEL" "[9]" "forget host key"      "( known_hosts )"
-        local _anim_label _anim_color
-        if [[ "${FISHELL_NOANIM:-0}" == "1" ]]; then
-            _anim_label="off"; _anim_color="$G_DIM"
-        else
-            _anim_label="on "; _anim_color="$G_BRIGHT"
-        fi
-        # [a] row: "  [a]  toggle animation     ( on  )               " = 2+3+2+20+1+1+1+3+1+1+15 = 50
-        printf '%b║%b  %b[a]%b  %b%-20s%b %b(%b %b%-3s%b %b)%b               %b║%b\n' \
-            "$G" "$C_RESET" \
-            "$CYA" "$C_RESET" \
-            "$G_BRIGHT" "toggle animation" "$C_RESET" \
-            "$CYA" "$C_RESET" \
-            "$_anim_color" "$_anim_label" "$C_RESET" \
-            "$CYA" "$C_RESET" \
-            "$G" "$C_RESET"
-        _row "$RED" "[0]" "logout"               "( exit )"
+        _row "$YEL" "[1]" "$L_M1_T" "$L_M1_H"
+        _row "$YEL" "[2]" "$L_M2_T" "$L_M2_H"
+        _row "$YEL" "[3]" "$L_M3_T" "$L_M3_H"
+        _row "$YEL" "[4]" "$L_M4_T" "$L_M4_H"
+        _row "$YEL" "[5]" "$L_M5_T" "$L_M5_H"
+        _row "$YEL" "[6]" "$L_M6_T" "$L_M6_H"
+        _row "$YEL" "[7]" "$L_M7_T" "$L_M7_H"
+        _row "$YEL" "[8]" "$L_M8_T" "$L_M8_H"
+        local _anim
+        if [[ "${FISHELL_NOANIM:-0}" == "1" ]]; then _anim="$L_OFF"; else _anim="$L_ON"; fi
+        _row "$CYA" "[l]" "$L_ML_T" "( $FISHELL_LANG )"
+        _row "$CYA" "[a]" "$L_MA_T" "( $_anim )"
+        _row "$RED" "[0]" "$L_M0_T" "$L_M0_H"
         printf '%b╚══════════════════════════════════════════════════╝%b\n' "$G" "$C_RESET"
         local opt
         # Prompt pede a opção em vez de imitar um shell: um "fishell@npad:~#"
         # dá a impressão de que dá pra digitar comando ali.
-        printf '\n  %b>%b %bselect option%b %b[1-9, a, 0]%b : ' \
-            "$G" "$C_RESET" "$G_BRIGHT" "$C_RESET" "$G_DIM" "$C_RESET"
+        printf '\n  %b>%b %b%s%b %b[1-8, l, a, 0]%b : ' \
+            "$G" "$C_RESET" "$G_BRIGHT" "$L_PROMPT" "$C_RESET" "$G_DIM" "$C_RESET"
         menu_prompt_read opt
         clear 2>/dev/null || true
         print_logo
@@ -567,21 +723,26 @@ menu() {
             6|06) setup_ssh;        pause_return ;;
             7|07) show_status;      pause_return ;;
             8|08) action_keygen;     pause_return ;;
-            9|09) action_forget_hostkey; pause_return ;;
             a|A)
                 if [[ "${FISHELL_NOANIM:-0}" == "1" ]]; then
                     export FISHELL_NOANIM=0
-                    flash="$(printf '%b[*]%b animation: %bon%b' "$G" "$C_RESET" "$G_BRIGHT" "$C_RESET")"
+                    flash="$(printf '%b[*]%b %s %b%s%b' "$G" "$C_RESET" "$L_ANIM" "$G_BRIGHT" "$L_ON" "$C_RESET")"
                 else
                     export FISHELL_NOANIM=1
-                    flash="$(printf '%b[*]%b animation: %boff%b' "$G" "$C_RESET" "$G_DIM" "$C_RESET")"
+                    flash="$(printf '%b[*]%b %s %b%s%b' "$G" "$C_RESET" "$L_ANIM" "$G_DIM" "$L_OFF" "$C_RESET")"
                 fi
                 ;;
+            l|L)
+                if [[ "$FISHELL_LANG" == "en" ]]; then FISHELL_LANG=pt; else FISHELL_LANG=en; fi
+                export FISHELL_LANG
+                set_lang
+                flash="$(printf '%b[*]%b %s %b%s%b' "$G" "$C_RESET" "$L_LANGSET" "$G_BRIGHT" "$FISHELL_LANG" "$C_RESET")"
+                ;;
             0|00|q|exit|logout)
-                printf '\n%b[*]%b session terminated. %bgoodbye.%b\n\n' "$G" "$C_RESET" "$G_DIM" "$C_RESET"
+                printf '\n%b[*]%b %s %b%s%b\n\n' "$G" "$C_RESET" "$L_BYE" "$G_DIM" "$L_BYE2" "$C_RESET"
                 exit 0 ;;
             "") ;; # ENTER vazio: só redesenha
-            *) flash="$(printf '%b[!]%b invalid opcode: %s' "$YEL" "$C_RESET" "$opt")" ;;
+            *) flash="$(printf '%b[!]%b %s %s' "$YEL" "$C_RESET" "$L_INVALID" "$opt")" ;;
         esac
     done
 }
@@ -606,7 +767,6 @@ main() {
         download) action_download ;;
         run)      shift; action_run_remote "$@" ;;
         keygen)   action_keygen ;;
-        forget)   action_forget_hostkey ;;
         status)   show_status ;;
         menu)
             if ! grep -q "^Host $SSH_ALIAS\$" "$HOME/.ssh/config" 2>/dev/null; then

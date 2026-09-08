@@ -39,7 +39,7 @@ def xterm(n):
     return (8 + (n - 232) * 10,) * 3
 
 
-def capture():
+def capture(lang="pt"):
     """Roda o fishell numa cópia descartável e devolve a saída ANSI crua."""
     with tempfile.TemporaryDirectory() as tmp:
         work = os.path.join(tmp, "fishell")
@@ -52,20 +52,22 @@ def capture():
         # script(1) dá um pty ao filho — sem isso o fishell desliga as cores.
         # FISHELL_NOANIM=1 é obrigatório: com animação o menu nunca vê o EOF.
         out = subprocess.run(
-            ["script", "-qec", "FISHELL_NOANIM=1 ./bin/fishell.sh", "/dev/null"],
+            ["script", "-qec", f"FISHELL_LANG={lang} FISHELL_NOANIM=1 ./bin/fishell.sh", "/dev/null"],
             cwd=work, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT, timeout=60,
         ).stdout.decode("utf-8", "replace")
-    # O painel ainda mostra "off" porque a captura desligou a animação; o que o
-    # usuário vê num run normal é "on".
-    return out.replace("off\x1b[0m", "on \x1b[0m")
+    # O painel mostra "off" porque a captura precisou desligar a animação (com
+    # ela ligada o menu nunca vê o EOF); num run normal o usuário vê "on".
+    # O espaço extra mantém as 50 colunas da caixa, já que "on" é 1 char menor.
+    return out.replace("( off )", "( on ) ")
 
 
 def parse(raw):
     """Extrai o frame do menu e devolve linhas de runs (cor, negrito, texto)."""
     frames = re.split(r"\x1b\[H\x1b\[2J\x1b\[3J", raw)
-    # 'CONTROL PANEL' só existe no frame do menu ('╔' também está na arte do logo).
-    frame = next((f for f in reversed(frames) if "CONTROL PANEL" in f), None)
+    # '╠' só existe na caixa do painel — a arte do logo usa ╔ ╗ ╚ ╝ ═ ║, nunca ╠.
+    # (Procurar pelo título não serve: ele muda de idioma.)
+    frame = next((f for f in reversed(frames) if "╠" in f), None)
     if frame is None:
         sys.exit("painel não encontrado na captura — o fishell chegou a rodar?")
 
@@ -128,5 +130,6 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("-o", "--out", default=os.path.join(REPO, "docs", "screenshot.png"))
+    ap.add_argument("-l", "--lang", default="pt", choices=("pt", "en"))
     args = ap.parse_args()
-    render(parse(capture()), args.out)
+    render(parse(capture(args.lang)), args.out)

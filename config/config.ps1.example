@@ -21,3 +21,8 @@ $SSH_KEYS_DIR = ''
 
 # Alias SSH usado no comando `ssh <alias>` (padrão: npad)
 $SSH_ALIAS = 'npad'
+
+# Idioma da interface: 'pt' (padrão) ou 'en'.
+# A variável de ambiente FISHELL_LANG sobrescreve isto, e a tecla [l] do
+# menu troca durante a sessão.
+$FISHELL_LANG = 'pt'

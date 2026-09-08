@@ -58,11 +58,18 @@ jobs:
           b=$(awk 'NF{exit} {c++} END{print c+0}' ~/.ssh/config)
           test "$b" -le 1 || { echo "linhas em branco acumulando no topo: $b"; exit 1; }
 
-      - name: painel desenha, fecha e mantém as 50 colunas
+      # Em pt o painel tem acento, e printf '%-20s' preenche por BYTE — por
+      # isso as duas línguas precisam ser checadas, não só uma.
+      - name: painel mantém as 50 colunas em pt e en
         run: |
-          FISHELL_NOANIM=1 NO_COLOR=1 timeout 30 ./bin/fishell.sh </dev/null >panel.txt
-          grep -q 'session terminated' panel.txt
-          python3 .github/scripts/check_panel.py <panel.txt
+          for lang in pt en; do
+            echo "── $lang ──"
+            FISHELL_LANG=$lang FISHELL_NOANIM=1 NO_COLOR=1 \
+              timeout 30 ./bin/fishell.sh </dev/null >panel-$lang.txt
+            python3 .github/scripts/check_panel.py <panel-$lang.txt
+          done
+          grep -q 'sessão encerrada' panel-pt.txt
+          grep -q 'session terminated' panel-en.txt
 
   powershell:
     name: fishell.ps1
@@ -111,9 +118,12 @@ jobs:
           test -f src/powershell/fishell.ps1
           echo "wrappers ok"
 
+      - name: tabelas de idioma em paridade
+        run: python3 .github/scripts/check_i18n.py
+
       - name: mesmos subcomandos nos dois ports
         run: |
-          for c in setup login test upload download run keygen forget status help; do
+          for c in setup login test upload download run keygen status help; do
             grep -qE "^ +$c[|)]" src/bash/fishell.sh || { echo "falta '$c' no fishell.sh"; exit 1; }
             grep -q "'$c'" src/powershell/fishell.ps1     || { echo "falta '$c' no fishell.ps1"; exit 1; }
           done
