@@ -16,10 +16,12 @@ jobs:
       - name: sintaxe (bash -n)
         run: bash -n src/bash/fishell.sh
 
-      - name: help roda sem config.sh
+      - name: help roda sem config.sh (pt e en)
         run: |
           test ! -f config.sh
-          FISHELL_NOANIM=1 NO_COLOR=1 ./bin/fishell.sh help | grep -q 'CONTROL PANEL'
+          FISHELL_NOANIM=1 NO_COLOR=1 ./bin/fishell.sh help | grep -q 'PAINEL'
+          FISHELL_LANG=en FISHELL_NOANIM=1 NO_COLOR=1 ./bin/fishell.sh help \
+            | grep -q 'CONTROL PANEL'
 
       - name: shellcheck (bloqueia em erros)
         run: |
