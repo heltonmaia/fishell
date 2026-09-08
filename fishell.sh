@@ -288,10 +288,14 @@ EOF
     if grep -q '^# ── fishell: begin ──$' "$home_ssh/config" 2>/dev/null; then
         # bloco gerenciado pelo fishell já existe: remove e reescreve com a config atual
         local cfg_tmp="$home_ssh/.config.fishell.tmp"
+        # Guarda as linhas e imprime ate' a ultima nao-vazia: sem isso cada
+        # setup repetido deixa mais uma linha em branco no topo do arquivo,
+        # porque o bloco e' reanexado sempre precedido de um echo "".
         awk '
             /^# ── fishell: begin ──$/ { skip=1; next }
             /^# ── fishell: end ──$/   { skip=0; next }
-            !skip
+            !skip { lines[++n] = $0; if (NF) last = n }
+            END   { for (i = 1; i <= last; i++) print lines[i] }
         ' "$home_ssh/config" > "$cfg_tmp"
         mv "$cfg_tmp" "$home_ssh/config"
         chmod 600 "$home_ssh/config"

@@ -31,10 +31,35 @@ jobs:
         continue-on-error: true
         run: shellcheck fishell.sh
 
-      - name: painel desenha, fecha e mantém as 50 colunas
+      # O runner não tem .ssh/ (é gitignored), então o setup automático do
+      # menu falharia e o painel nunca chegaria a ser desenhado.
+      - name: setup completo com chave descartável
+        env:
+          FISHELL_NOANIM: '1'
+          NO_COLOR: '1'
         run: |
           cp config.sh.example config.sh
           sed -i 's/seu_usuario_aqui/ci_user/' config.sh
+          ./fishell.sh keygen
+          ./fishell.sh setup
+          grep -q '^Host npad$' ~/.ssh/config
+
+      # Regressão do bug que o BOM ausente causava no Windows: as sentinelas
+      # deixavam de casar e cada setup acrescentava um bloco novo.
+      - name: setup repetido reescreve o bloco em vez de duplicar
+        env:
+          FISHELL_NOANIM: '1'
+          NO_COLOR: '1'
+        run: |
+          ./fishell.sh setup >/dev/null
+          ./fishell.sh setup >/dev/null
+          n=$(grep -c '# ── fishell: begin ──' ~/.ssh/config || true)
+          test "$n" = "1" || { echo "bloco duplicado ($n ocorrências)"; cat ~/.ssh/config; exit 1; }
+          b=$(awk 'NF{exit} {c++} END{print c+0}' ~/.ssh/config)
+          test "$b" -le 1 || { echo "linhas em branco acumulando no topo: $b"; exit 1; }
+
+      - name: painel desenha, fecha e mantém as 50 colunas
+        run: |
           FISHELL_NOANIM=1 NO_COLOR=1 timeout 30 ./fishell.sh </dev/null >panel.txt
           grep -q 'session terminated' panel.txt
           python3 .github/scripts/check_panel.py <panel.txt

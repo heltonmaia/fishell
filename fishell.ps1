@@ -228,7 +228,9 @@ Host $($script:SSH_ALIAS)
             '(?ms)(\r?\n)?^# ── fishell: begin ──\s*?\r?\n.*?^# ── fishell: end ──\s*?\r?\n?',
             ''
         )
-        Set-Content -Path $sshCfg -Value $stripped -NoNewline
+        # TrimEnd pelo mesmo motivo do awk no bash: o bloco e' reanexado
+        # sempre precedido de uma linha em branco, que se acumularia.
+        Set-Content -Path $sshCfg -Value $stripped.TrimEnd("`r", "`n") -NoNewline
         Add-Content -Path $sshCfg -Value $block
         Log-Ok "ssh alias '$($script:SSH_ALIAS)' updated in ~/.ssh/config"
     } elseif ($existing -notmatch "(?m)^Host $([regex]::Escape($script:SSH_ALIAS))\s*$") {
