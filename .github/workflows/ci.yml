@@ -1,0 +1,87 @@
+name: ci
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  bash:
+    name: fishell.sh
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: sintaxe (bash -n)
+        run: bash -n fishell.sh
+
+      - name: help roda sem config.sh
+        run: |
+          test ! -f config.sh
+          FISHELL_NOANIM=1 NO_COLOR=1 ./fishell.sh help | grep -q 'CONTROL PANEL'
+
+      - name: shellcheck (bloqueia em erros)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq shellcheck
+          shellcheck --severity=error fishell.sh
+
+      - name: shellcheck completo (informativo)
+        continue-on-error: true
+        run: shellcheck fishell.sh
+
+      - name: painel desenha, fecha e mantém as 50 colunas
+        run: |
+          cp config.sh.example config.sh
+          sed -i 's/seu_usuario_aqui/ci_user/' config.sh
+          FISHELL_NOANIM=1 NO_COLOR=1 timeout 30 ./fishell.sh </dev/null >panel.txt
+          grep -q 'session terminated' panel.txt
+          python3 .github/scripts/check_panel.py <panel.txt
+
+  powershell:
+    name: fishell.ps1
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Windows PowerShell 5.1 lê .ps1 sem BOM como ANSI e destrói toda a UI
+      # Unicode — inclusive as sentinelas do bloco no ~/.ssh/config.
+      - name: BOM UTF-8 obrigatório
+        run: |
+          if [ "$(head -c 3 fishell.ps1 | od -An -tx1 | tr -d ' \n')" != "efbbbf" ]; then
+            echo "ERRO: fishell.ps1 precisa estar em UTF-8 COM BOM"
+            exit 1
+          fi
+
+      - name: sintaxe (parser do PowerShell)
+        shell: pwsh
+        run: .github/scripts/Check-Syntax.ps1
+
+      - name: PSScriptAnalyzer (bloqueia em erros)
+        shell: pwsh
+        run: .github/scripts/Invoke-Analyzer.ps1
+
+  paridade:
+    name: paridade sh x ps1
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Os dois ports são escritos à mão em paralelo. A versão é o sinal mais
+      # barato de que uma mudança não foi aplicada só de um lado.
+      - name: versão igual nos dois ports
+        run: |
+          sh_v=$(sed -n 's/^FISHELL_VERSION="\(.*\)"$/\1/p' fishell.sh)
+          ps_v=$(sed -n "s/^\$FishellVersion = '\(.*\)'\$/\1/p" fishell.ps1)
+          echo "sh=$sh_v  ps1=$ps_v"
+          test -n "$sh_v"
+          test "$sh_v" = "$ps_v"
+
+      - name: mesmos subcomandos nos dois ports
+        run: |
+          for c in setup login test upload download run keygen forget status help; do
+            grep -qE "^ +$c[|)]" fishell.sh || { echo "falta '$c' no fishell.sh"; exit 1; }
+            grep -q "'$c'" fishell.ps1     || { echo "falta '$c' no fishell.ps1"; exit 1; }
+          done
+          echo "subcomandos ok"
