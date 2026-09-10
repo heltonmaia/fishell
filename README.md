@@ -1,8 +1,10 @@
 # fishell
 
-Acesso rápido ao **NPAD/UFRN**, o supercomputador do IMD. Gera sua chave SSH,
-configura o acesso e abre um painel para conectar, mandar e trazer arquivos —
-sem decorar `ssh -p4422 usuario@sc2.npad.ufrn.br`.
+Acesso rápido ao **NPAD/UFRN**, o supercomputador do IMD. Registra o alias
+`npad`, guarda suas chaves onde o Colab não apaga, e reúne conectar, enviar,
+baixar e rodar comando num painel — sem repetir `-p 4422` em tudo.
+
+Comece pela **parte 1**: o acesso na mão, sem ferramenta nenhuma.
 
 [![ci](https://github.com/heltonmaia/fishell/actions/workflows/ci.yml/badge.svg)](https://github.com/heltonmaia/fishell/actions/workflows/ci.yml)
 
@@ -10,11 +12,84 @@ sem decorar `ssh -p4422 usuario@sc2.npad.ufrn.br`.
 
 ---
 
-## Começando
+## 1. Acesso ao NPAD
 
-São três passos, e o próprio fishell te guia por eles.
+Antes do fishell, faça o acesso **na mão**. São três comandos, e é o que
+estabelece a base: se isto funciona, o resto é conveniência; se não funciona,
+nenhuma ferramenta conserta.
 
-### 1. Instale e rode
+### Gere sua chave
+
+O NPAD só aceita login por chave — não existe senha. E a chave precisa ser
+**RSA**. Dê enter em todas as perguntas:
+
+```bash
+ssh-keygen -t rsa -C "seu-nome@sua-maquina"
+```
+
+Isso cria `~/.ssh/id_rsa` (privada, nunca sai daí) e `~/.ssh/id_rsa.pub`
+(pública, é a que você cadastra).
+
+### Cadastre a pública
+
+```bash
+cat ~/.ssh/id_rsa.pub
+```
+
+Copie a linha inteira e cadastre em
+**[npad.ufrn.br → Primeiros Passos](https://npad.ufrn.br/npad/primeirospassos)**.
+Se você já tem conta e está só adicionando uma máquina, o formulário é outro:
+**[Adição de Chave](https://npad.ufrn.br/npad/chave)**.
+
+Seu login chega por e-mail depois da aprovação.
+
+### Conecte
+
+```bash
+ssh -p 4422 SEU_LOGIN@sc2.npad.ufrn.br
+```
+
+Deu certo? Você está no **nó de login**. Saia com `exit`.
+
+Mandar e trazer arquivos é o mesmo endereço, com `-P` maiúsculo:
+
+```bash
+scp -P 4422 dados.zip SEU_LOGIN@sc2.npad.ufrn.br:~/
+scp -P 4422 SEU_LOGIN@sc2.npad.ufrn.br:~/resultado.h5 .
+```
+
+> **No Google Colab tem um porém.** O `~/.ssh` fica na VM, que é descartada a
+> cada reinício — a chave se perde junto. Gere dentro do seu Drive e aponte
+> para ela na conexão:
+>
+> ```bash
+> ssh-keygen -t rsa -f /content/drive/MyDrive/SuaPasta/.ssh/id_rsa
+> ssh -i /content/drive/MyDrive/SuaPasta/.ssh/id_rsa -p 4422 SEU_LOGIN@sc2.npad.ufrn.br
+> ```
+>
+> Funciona, mas você repete o `-i` e o `-p` em todo comando. É exatamente esse
+> incômodo que a próxima seção resolve.
+
+---
+
+## 2. Por que o fishell
+
+Com o acesso funcionando, o que sobra é repetição:
+
+- `-p 4422` no `ssh` e `-P 4422` no `scp`, sempre;
+- no Colab, refazer a instalação da chave a cada reinício da VM;
+- `scp` com caminho longo dos dois lados toda vez que troca um arquivo.
+
+O fishell registra um alias `npad` no seu `~/.ssh/config` — a partir daí `ssh
+npad` basta, com ou sem ele — guarda suas chaves numa pasta que sobrevive ao
+Colab, e junta conectar, enviar, baixar e rodar comando num painel.
+
+Ele não substitui o que você fez acima: usa exatamente o mesmo `ssh` e o mesmo
+`scp`.
+
+---
+
+## 3. Instalar o fishell
 
 **Google Colab** — use o **Terminal** (ícone no canto inferior esquerdo), não
 células. Monte o Drive antes, numa célula:
@@ -25,7 +100,6 @@ cd /content/drive/MyDrive/SuaPasta
 git clone https://github.com/heltonmaia/fishell.git
 cd fishell
 cp config/config.sh.example config.sh
-bash bin/fishell.sh
 ```
 
 **Linux · macOS · WSL**
@@ -35,7 +109,6 @@ git clone https://github.com/heltonmaia/fishell.git
 cd fishell
 chmod +x bin/fishell.sh src/bash/fishell.sh
 cp config/config.sh.example config.sh
-./bin/fishell.sh
 ```
 
 **Windows** — precisa do OpenSSH Client (já vem no Windows 10+).
@@ -44,70 +117,50 @@ cp config/config.sh.example config.sh
 git clone https://github.com/heltonmaia/fishell.git
 cd fishell
 Copy-Item config\config.ps1.example config.ps1
-.\bin\fishell.cmd
 ```
 
 > No Colab use sempre `bash bin/fishell.sh`, nunca `./bin/fishell.sh`: o Drive
 > é montado sem permissão de execução, e o `chmod` ali não adianta.
 
-O `config.sh` é a **sua** configuração e o `.ssh/` são as **suas** chaves —
-nenhum dos dois é versionado, de propósito, para o seu login e sua chave
-privada nunca irem parar num commit. A consequência: apagar e clonar o repo de
-novo leva os dois junto. Se isso te preocupa, guarde as chaves **fora** da
-pasta do fishell e aponte para elas:
+### Aponte para suas chaves
 
-```bash
-SSH_KEYS_DIR="/content/drive/MyDrive/SuaPasta/.ssh"   # no config.sh
-```
-
-### 2. Gere e cadastre sua chave
-
-O NPAD exige uma chave **RSA**. Se você ainda não tem uma, gere no terminal —
-dê enter em todas as perguntas:
+Copie o par que você já usou na parte 1 para a pasta `.ssh/` do fishell:
 
 ```bash
 mkdir -p .ssh
-ssh-keygen -t rsa -f .ssh/id_rsa -C "seu-nome@colab"
+cp ~/.ssh/id_rsa ~/.ssh/id_rsa.pub .ssh/
 ```
 
-O `-f .ssh/id_rsa` guarda a chave **dentro da pasta do fishell**, e não no
-`~/.ssh` da máquina. No Colab isso é o que importa: o `~/.ssh` da VM é
-descartado a cada reinício, enquanto o repo está no Drive e persiste. O `-C` é
-opcional e serve só para você reconhecer a chave depois, na sua lista do NPAD —
-sem ele o comentário vira algo como `root@366ea8542bb9`.
-
-Rode o fishell de novo: ele mostra sua chave **pública**. Copie e cadastre em
-**[npad.ufrn.br → Primeiros Passos](https://npad.ufrn.br/npad/primeirospassos)**.
-
-Seu login chega por e-mail depois da aprovação.
-
-> A chave **privada** (`.ssh/id_rsa`, sem o `.pub`) nunca sai do seu
-> computador: não vai no formulário, no Git nem no WhatsApp.
-
-### 3. Diga qual é o seu login
-
-Abra o `config.sh` e troque `seu_usuario_aqui` pelo login que chegou por
-e-mail.
-
-**No Colab**, dois cliques no arquivo pelo painel **Arquivos** (barra da
-esquerda) — o terminal do Colab não tem `nano`. Nas outras plataformas,
-`nano config.sh` ou o editor que preferir.
-
-Rode de novo e o painel abre. Pronto.
-
-> A pasta `.ssh/` começa com ponto, então é **oculta**: para vê-la no painel
-> Arquivos do Colab, ligue o ícone de olho (*mostrar arquivos ocultos*).
-
-No Colab, **repita o `setup` toda vez que a VM reiniciar** — o `~/.ssh` da
-máquina virtual é descartado junto com ela:
+No Colab, se as chaves já estão no Drive em outro lugar, não copie — aponte,
+no `config.sh`:
 
 ```bash
-bash bin/fishell.sh setup
+SSH_KEYS_DIR="/content/drive/MyDrive/SuaPasta/.ssh"
 ```
+
+### Preencha seu login e rode
+
+Abra o `config.sh` e troque `seu_usuario_aqui` pelo login do NPAD. **No Colab**,
+dois cliques no arquivo pelo painel **Arquivos** — o terminal de lá não tem
+`nano`.
+
+```bash
+./bin/fishell.sh setup     # instala as chaves e registra o alias npad
+./bin/fishell.sh test      # confirma que conecta
+./bin/fishell.sh           # abre o painel
+```
+
+No Colab, **repita o `setup` toda vez que a VM reiniciar**: o `~/.ssh` da
+máquina virtual é descartado junto com ela, e é ele que o `ssh` consulta.
+
+> `config.sh` e `.ssh/` são seus e não são versionados, de propósito — para o
+> seu login e sua chave privada nunca irem parar num commit. A consequência:
+> apagar e clonar o repo de novo leva os dois. Guardar as chaves fora da pasta
+> do fishell, via `SSH_KEYS_DIR`, evita isso.
 
 ---
 
-## O painel
+## 4. O painel
 
 Cada tecla é uma ação — não precisa dar ENTER.
 
@@ -125,7 +178,7 @@ Cada tecla é uma ação — não precisa dar ENTER.
 
 ---
 
-## Comandos
+## 5. Comandos
 
 Tudo que está no painel também funciona direto na linha de comando:
 
@@ -152,7 +205,7 @@ Para mudar o idioma de forma permanente, edite `FISHELL_LANG` no `config.sh`.
 
 ---
 
-## Usando o NPAD
+## 6. Usando o NPAD
 
 ### Onde o seu programa roda
 
