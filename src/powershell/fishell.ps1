@@ -105,6 +105,7 @@ function Set-Lang {
             PROBE='probing target'; HANDSHAKE='dispatching handshake (10s timeout)...'
             TUNNEL_OK='tunnel established ::'; HANDSHAKE_FAIL='handshake failed:'
             HINT_KEY='your public key is not registered at NPAD yet, or $NPAD_USER is wrong'
+            HINT_NOKEY='the key is not installed in ~/.ssh. Run: bin\fishell.cmd setup'
             HINT_HOSTKEY='missing known_hosts, or the server key changed - see the README'
             HINT_NET='no route to the server - firewall, or port 4422 blocked'
             HINT_DNS='could not resolve the host - check your connection'
@@ -163,6 +164,7 @@ function Set-Lang {
             PROBE='testando'; HANDSHAKE='enviando handshake (limite de 10s)...'
             TUNNEL_OK='conexão estabelecida ::'; HANDSHAKE_FAIL='falhou:'
             HINT_KEY='sua chave pública ainda não está cadastrada no NPAD, ou o $NPAD_USER está errado'
+            HINT_NOKEY='a chave não está instalada no ~/.ssh. Rode: bin\fishell.cmd setup'
             HINT_HOSTKEY='falta o known_hosts, ou a chave do servidor mudou - veja o README'
             HINT_NET='sem rota até o servidor - firewall, ou porta 4422 bloqueada'
             HINT_DNS='não consegui resolver o host - confira sua conexão'
@@ -482,7 +484,10 @@ function Test-Connection-Npad {
     # nao diz qual dos tres, e o aluno fica sem saber por onde comecar.
     Log-Err $L.HANDSHAKE_FAIL
     if ($err) { Write-Line "${GD}  $err${R}" }
+    # 'no such identity' antes de 'Permission denied': o erro traz os dois, e
+    # o primeiro e' a causa.
     $hint = switch -Regex ($err) {
+        'no such identity'             { $L.HINT_NOKEY;   break }
         'Permission denied'            { $L.HINT_KEY;     break }
         'Host key verification failed' { $L.HINT_HOSTKEY; break }
         'Could not resolve'            { $L.HINT_DNS;     break }

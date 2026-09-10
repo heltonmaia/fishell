@@ -112,6 +112,7 @@ set_lang() {
         L_PROBE="probing target"; L_HANDSHAKE="dispatching handshake (10s timeout)..."
         L_TUNNEL_OK="tunnel established ::"; L_HANDSHAKE_FAIL="handshake failed:"
         L_HINT_KEY="your public key is not registered at NPAD yet, or NPAD_USER is wrong"
+        L_HINT_NOKEY="the key is not installed in ~/.ssh. Run: ./bin/fishell.sh setup"
         L_HINT_HOSTKEY="missing known_hosts, or the server key changed. Veja o README"
         L_HINT_NET="no route to the server: firewall, or port 4422 blocked"
         L_HINT_DNS="could not resolve the host, check your connection"
@@ -172,6 +173,7 @@ set_lang() {
         L_PROBE="testando"; L_HANDSHAKE="enviando handshake (limite de 10s)..."
         L_TUNNEL_OK="conexão estabelecida ::"; L_HANDSHAKE_FAIL="falhou:"
         L_HINT_KEY="sua chave pública ainda não está cadastrada no NPAD, ou o NPAD_USER está errado"
+        L_HINT_NOKEY="a chave não está instalada no ~/.ssh. Rode: ./bin/fishell.sh setup"
         L_HINT_HOSTKEY="falta o known_hosts, ou a chave do servidor mudou. Veja o README"
         L_HINT_NET="sem rota até o servidor: firewall, ou porta 4422 bloqueada"
         L_HINT_DNS="não consegui resolver o host, confira sua conexão"
@@ -518,7 +520,11 @@ test_connection() {
     log_err "$L_HANDSHAKE_FAIL"
     [[ -n "$err" ]] && printf '%b  %s%b\n' "$G_DIM" "$err" "$C_RESET"
     local hint=""
+    # "no such identity" antes de "Permission denied": o erro traz os dois, e
+    # o primeiro e' a causa. Dizer "chave nao cadastrada" aqui manda o usuario
+    # depurar o lado errado.
     case "$err" in
+        *"no such identity"*)               hint="$L_HINT_NOKEY" ;;
         *"Permission denied"*)              hint="$L_HINT_KEY" ;;
         *"Host key verification failed"*)   hint="$L_HINT_HOSTKEY" ;;
         *"Could not resolve"*)              hint="$L_HINT_DNS" ;;
