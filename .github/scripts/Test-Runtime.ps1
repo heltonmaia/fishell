@@ -54,8 +54,13 @@ Assert-Match $out 'ssh-rsa ' 'keygen imprime a publica'
 Write-Host 'setup'
 Copy-Item config/config.ps1.example config.ps1 -Force
 (Get-Content config.ps1) -replace 'seu_usuario_aqui', 'ci_user' | Set-Content config.ps1
-Assert-Match (Invoke-Fishell @('setup')) 'npad' 'setup'
+$out = Invoke-Fishell @('setup')
+Write-Host '--- saida do setup ---'; Write-Host $out; Write-Host '----------------------'
+# Casa a linha de sucesso, nao so' "npad" — o banner tambem contem "npad".
+Assert-Match $out "alias 'npad'" 'setup registrou o alias'
 $sshCfg = Join-Path $HOME '.ssh/config'
+if (-not (Test-Path $sshCfg)) { throw "nao criou $sshCfg" }
+Write-Host "--- $sshCfg ---"; Get-Content $sshCfg | Write-Host; Write-Host '----------------------'
 if (-not (Select-String -Path $sshCfg -Pattern '^Host npad$' -Quiet)) { throw 'alias nao registrado' }
 
 Write-Host 'setup repetido nao duplica o bloco'
