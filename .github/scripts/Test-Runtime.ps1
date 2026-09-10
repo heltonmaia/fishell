@@ -45,6 +45,17 @@ Assert-Match $out 'primeirospassos' 'link do cadastro'
 if (Test-Path '.ssh') { throw 'nao deveria ter gerado chave' }
 Remove-Item -Force config.ps1 -ErrorAction SilentlyContinue
 
+Write-Host 'com chave no ~/.ssh: manda copiar, e cria a pasta de chaves'
+$homeKey = Join-Path $HOME '.ssh/id_rsa'
+Remove-Item -Force $homeKey, "$homeKey.pub" -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Path (Join-Path $HOME '.ssh') -Force | Out-Null
+& ssh-keygen -t rsa -b 2048 -N '' -f $homeKey | Out-Null
+$out = Invoke-Fishell
+Assert-Match $out 'copie para c' 'sugere copiar'
+if (-not (Test-Path .ssh)) { throw 'nao criou a pasta de chaves' }
+Remove-Item -Recurse -Force .ssh, config.ps1 -ErrorAction SilentlyContinue
+Remove-Item -Force $homeKey, "$homeKey.pub" -ErrorAction SilentlyContinue
+
 Write-Host 'com chave existente: mostra a publica'
 New-Item -ItemType Directory -Path .ssh -Force | Out-Null
 & ssh-keygen -t rsa -b 2048 -N '' -f .ssh/id_rsa | Out-Null

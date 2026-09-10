@@ -117,7 +117,9 @@ function Set-Lang {
             STDOUT_BEGIN='─── remote stdout ───'; STDOUT_END='─── end ─────────────'
             FIRSTRUN='first run - follow the steps:'
             STEP_REGISTER='register your public key (your login comes by e-mail)'
-            STEP_KEYGEN="create your ssh key (skip if you already have one)"
+            STEP_KEYGEN='create your ssh key'
+            STEP_COPYKEY='copy the key you already have into this folder'
+            KEYS_DIR_MADE='keys folder created:'
             STEP_CONFIG='put that login in $NPAD_USER'
             STEP_RERUN='run again'; KEY_FOUND='your public key:'
             KEY_INVALID='this public key does not look valid - do NOT register it'
@@ -173,7 +175,9 @@ function Set-Lang {
             STDOUT_BEGIN='─── saída remota ────'; STDOUT_END='─── fim ─────────────'
             FIRSTRUN='primeira execução - siga os passos:'
             STEP_REGISTER='cadastre a chave pública (o login chega por e-mail)'
-            STEP_KEYGEN='gere sua chave ssh (pule se já tiver uma)'
+            STEP_KEYGEN='gere sua chave ssh'
+            STEP_COPYKEY='copie para cá a chave que você já tem'
+            KEYS_DIR_MADE='pasta de chaves criada:'
             STEP_CONFIG='ponha esse login em $NPAD_USER'
             STEP_RERUN='rode de novo'; KEY_FOUND='sua chave pública:'
             KEY_INVALID='esta chave pública não parece válida - NÃO cadastre ela'
@@ -207,6 +211,12 @@ function Show-Onboarding {
     $pub = Join-Path $script:SSH_KEYS_DIR 'id_rsa.pub'
     $n = 1
 
+    # Cria a pasta de chaves: e' um passo a menos para o usuario.
+    if (-not (Test-Path $script:SSH_KEYS_DIR)) {
+        New-Item -ItemType Directory -Path $script:SSH_KEYS_DIR -Force | Out-Null
+        Log-Ok "$($L.KEYS_DIR_MADE) $($script:SSH_KEYS_DIR)"
+    }
+
     Write-Line ""
     Write-Line "  ${GB}${B}$($L.FIRSTRUN)${R}"
     Write-Line ""
@@ -227,8 +237,22 @@ function Show-Onboarding {
             Write-Line ""
         }
     } else {
-        Write-Line "  ${YEL}$n.${R} $($L.STEP_KEYGEN)"
-        Write-Line "     ${G}PS> mkdir .ssh; ssh-keygen -t rsa -f .ssh/id_rsa${R}"
+        # So' encurta para ".ssh" quando e' mesmo a pasta padrao do repo: com
+        # SSH_KEYS_DIR customizado o caminho curto mandaria o usuario gerar a
+        # chave onde o fishell nao vai procurar.
+        $keysDisp = $script:SSH_KEYS_DIR
+        if ((Get-Location).Path -eq $RepoRoot -and
+            $script:SSH_KEYS_DIR -eq (Join-Path $RepoRoot '.ssh')) { $keysDisp = '.ssh' }
+
+        if (Test-Path (Join-Path $HOME '.ssh/id_rsa')) {
+            # Ja' tem chave no ~/.ssh: copiar e' melhor que gerar outra, que
+            # precisaria de um cadastro novo no NPAD.
+            Write-Line "  ${YEL}$n.${R} $($L.STEP_COPYKEY)"
+            Write-Line "     ${G}PS> copy `$HOME\.ssh\id_rsa*  $keysDisp\${R}"
+        } else {
+            Write-Line "  ${YEL}$n.${R} $($L.STEP_KEYGEN)"
+            Write-Line "     ${G}PS> ssh-keygen -t rsa -f $keysDisp/id_rsa${R}"
+        }
         $n++
     }
 

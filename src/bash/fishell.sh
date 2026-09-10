@@ -129,7 +129,9 @@ set_lang() {
         L_KEY_FOUND="your public key:"
         L_KEY_INVALID="this public key does not look valid, do NOT register it"
         L_KEY_FILE="file:"
-        L_STEP_KEYGEN="create your ssh key (skip if you already have one)"
+        L_STEP_KEYGEN="create your ssh key"
+        L_STEP_COPYKEY="copy the key you already have into this folder"
+        L_KEYS_DIR_MADE="keys folder created:"
         L_STATUS_STEP="system readout"
         L_ST_USER="USER"; L_ST_HOST="HOST"; L_ST_PORT="PORT"
         L_ST_ALIAS="ALIAS"; L_ST_KEYS="KEYS_DIR"; L_ST_VERSION="VERSION"
@@ -187,7 +189,9 @@ set_lang() {
         L_KEY_FOUND="sua chave pública:"
         L_KEY_INVALID="esta chave pública não parece válida, NÃO cadastre ela"
         L_KEY_FILE="arquivo:"
-        L_STEP_KEYGEN="gere sua chave ssh (pule se já tiver uma)"
+        L_STEP_KEYGEN="gere sua chave ssh"
+        L_STEP_COPYKEY="copie para cá a chave que você já tem"
+        L_KEYS_DIR_MADE="pasta de chaves criada:"
         L_STATUS_STEP="configuração atual"
         L_ST_USER="USUÁRIO"; L_ST_HOST="HOST"; L_ST_PORT="PORTA"
         L_ST_ALIAS="ALIAS"; L_ST_KEYS="CHAVES"; L_ST_VERSION="VERSÃO"
@@ -350,6 +354,13 @@ show_onboarding() {
     local pub="$SSH_KEYS_DIR/id_rsa.pub"
     local n=1
 
+    # Cria a pasta de chaves: e' um passo a menos, e criar pasta oculta pelo
+    # painel de arquivos do Colab e' incomodo.
+    if [[ ! -d "$SSH_KEYS_DIR" ]] && mkdir -p "$SSH_KEYS_DIR" 2>/dev/null; then
+        chmod 700 "$SSH_KEYS_DIR" 2>/dev/null || true
+        log_ok "$L_KEYS_DIR_MADE $SSH_KEYS_DIR"
+    fi
+
     printf '\n%b  %s%b\n\n' "$G_BRIGHT$C_BOLD" "$L_FIRSTRUN" "$C_RESET"
 
     if [[ -f "$pub" ]]; then
@@ -364,11 +375,20 @@ show_onboarding() {
             printf '  %b%s%b\n\n' "$G_DIM" "$pub" "$C_RESET"
         fi
     else
+        # So' encurta para ".ssh" quando e' mesmo a pasta padrao do repo: com
+        # SSH_KEYS_DIR customizado o caminho curto mandaria o usuario gerar a
+        # chave onde o fishell nao vai procurar.
         local keys_disp="$SSH_KEYS_DIR"
-        [[ "$PWD" == "$REPO_ROOT" ]] && keys_disp=".ssh"
-        printf '  %b%d.%b %s\n     %b$ mkdir -p %s && ssh-keygen -t rsa -f %s/id_rsa%b\n' \
-            "$YEL" "$n" "$C_RESET" "$L_STEP_KEYGEN" \
-            "$G" "$keys_disp" "$keys_disp" "$C_RESET"
+        [[ "$PWD" == "$REPO_ROOT" && "$SSH_KEYS_DIR" == "$REPO_ROOT/.ssh" ]] && keys_disp=".ssh"
+        if [[ -f "$HOME/.ssh/id_rsa" ]]; then
+            # Ja' tem chave no ~/.ssh: copiar e' melhor que gerar outra, que
+            # precisaria de um cadastro novo no NPAD.
+            printf '  %b%d.%b %s\n     %b$ cp ~/.ssh/id_rsa ~/.ssh/id_rsa.pub %s/%b\n' \
+                "$YEL" "$n" "$C_RESET" "$L_STEP_COPYKEY" "$G" "$keys_disp" "$C_RESET"
+        else
+            printf '  %b%d.%b %s\n     %b$ ssh-keygen -t rsa -f %s/id_rsa%b\n' \
+                "$YEL" "$n" "$C_RESET" "$L_STEP_KEYGEN" "$G" "$keys_disp" "$C_RESET"
+        fi
         n=$((n+1))
     fi
 
