@@ -23,6 +23,17 @@ jobs:
           FISHELL_LANG=en FISHELL_NOANIM=1 NO_COLOR=1 ./bin/fishell.sh help \
             | grep -q 'CONTROL PANEL'
 
+      # keygen e' o passo 1 do README e roda ANTES de o aluno ter conta no
+      # NPAD — nao pode exigir NPAD_USER preenchido, senao vira impasse.
+      - name: keygen funciona em clone novo, sem conta configurada
+        run: |
+          test ! -f config.sh
+          FISHELL_NOANIM=1 NO_COLOR=1 bash bin/fishell.sh keygen | tee kg.txt
+          test -f .ssh/id_rsa && test -f .ssh/id_rsa.pub
+          grep -q 'npad.ufrn.br' kg.txt
+          grep -q ' fishell$' .ssh/id_rsa.pub     # comentario sem "@fishell"
+          rm -rf .ssh kg.txt config.sh
+
       - name: shellcheck (bloqueia em erros)
         run: |
           sudo apt-get update -qq
@@ -62,17 +73,6 @@ jobs:
 
       # Em pt o painel tem acento, e printf '%-20s' preenche por BYTE — por
       # isso as duas línguas precisam ser checadas, não só uma.
-      # keygen e' o passo 1 do README e roda ANTES de o aluno ter conta no
-      # NPAD — nao pode exigir NPAD_USER preenchido, senao vira impasse.
-      - name: keygen funciona em clone novo, sem conta configurada
-        run: |
-          test ! -f config.sh
-          FISHELL_NOANIM=1 NO_COLOR=1 bash bin/fishell.sh keygen | tee kg.txt
-          test -f .ssh/id_rsa && test -f .ssh/id_rsa.pub
-          grep -q 'npad.ufrn.br' kg.txt
-          grep -q ' fishell$' .ssh/id_rsa.pub     # comentario sem "@fishell"
-          rm -rf .ssh kg.txt config.sh
-
       # No Colab o repo costuma ficar no Drive, um mount FUSE onde o bit de
       # execução do git não sobrevive. O wrapper tem que continuar funcionando.
       - name: funciona sem bit de execução (Drive/FUSE)
