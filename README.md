@@ -74,6 +74,9 @@ Seu login chega por e-mail depois da aprovação.
 ssh -p4422 SEU_LOGIN@sc2.npad.ufrn.br
 ```
 
+Não precisa apontar a chave: o `ssh` procura `~/.ssh/id_rsa` por conta própria,
+que é onde o `ssh-keygen` acabou de salvar.
+
 Deu certo? Você está no **nó de login**. Saia com `exit`.
 
 Mandar e trazer arquivos é o mesmo endereço, com `-P` maiúsculo:
