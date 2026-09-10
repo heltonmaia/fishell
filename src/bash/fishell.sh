@@ -397,16 +397,20 @@ show_onboarding() {
         # chave onde o fishell nao vai procurar.
         local keys_disp="$SSH_KEYS_DIR"
         [[ "$PWD" == "$REPO_ROOT" && "$SSH_KEYS_DIR" == "$REPO_ROOT/.ssh" ]] && keys_disp=".ssh"
+        # O mkdir so' entra quando a pasta nao existe: a .ssh do repo ja' vem
+        # no clone, e sugerir criar o que ja' esta' la' e' ruido.
+        local mk=""
+        [[ -d "$SSH_KEYS_DIR" ]] || mk="mkdir -p $keys_disp && "
         if [[ -f "$HOME/.ssh/id_rsa" ]]; then
             # Ja' tem chave no ~/.ssh: copiar e' melhor que gerar outra, que
             # precisaria de um cadastro novo no NPAD.
-            printf '  %b%d.%b %s\n     %b$ mkdir -p %s && cp ~/.ssh/id_rsa ~/.ssh/id_rsa.pub %s/%b\n' \
+            printf '  %b%d.%b %s\n     %b$ %scp ~/.ssh/id_rsa ~/.ssh/id_rsa.pub %s/%b\n' \
                 "$YEL" "$n" "$C_RESET" "$L_STEP_COPYKEY" \
-                "$G" "$keys_disp" "$keys_disp" "$C_RESET"
+                "$G" "$mk" "$keys_disp" "$C_RESET"
         else
-            printf '  %b%d.%b %s\n     %b$ mkdir -p %s && ssh-keygen -t rsa -f %s/id_rsa%b\n' \
+            printf '  %b%d.%b %s\n     %b$ %sssh-keygen -t rsa -f %s/id_rsa%b\n' \
                 "$YEL" "$n" "$C_RESET" "$L_STEP_KEYGEN" \
-                "$G" "$keys_disp" "$keys_disp" "$C_RESET"
+                "$G" "$mk" "$keys_disp" "$C_RESET"
         fi
         n=$((n+1))
     fi

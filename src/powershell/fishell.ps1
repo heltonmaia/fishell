@@ -250,14 +250,17 @@ function Show-Onboarding {
         if ((Get-Location).Path -eq $RepoRoot -and
             $script:SSH_KEYS_DIR -eq (Join-Path $RepoRoot '.ssh')) { $keysDisp = '.ssh' }
 
+        # O mkdir so' entra quando a pasta nao existe: a .ssh do repo ja' vem
+        # no clone, e sugerir criar o que ja' esta' la' e' ruido.
+        $mk = if (Test-Path $script:SSH_KEYS_DIR) { '' } else { "mkdir $keysDisp; " }
         if (Test-Path (Join-Path $HOME '.ssh/id_rsa')) {
             # Ja' tem chave no ~/.ssh: copiar e' melhor que gerar outra, que
             # precisaria de um cadastro novo no NPAD.
             Write-Line "  ${YEL}$n.${R} $($L.STEP_COPYKEY)"
-            Write-Line "     ${G}PS> mkdir $keysDisp; copy `$HOME\.ssh\id_rsa*  $keysDisp\${R}"
+            Write-Line "     ${G}PS> ${mk}copy `$HOME\.ssh\id_rsa*  $keysDisp\${R}"
         } else {
             Write-Line "  ${YEL}$n.${R} $($L.STEP_KEYGEN)"
-            Write-Line "     ${G}PS> mkdir $keysDisp; ssh-keygen -t rsa -f $keysDisp/id_rsa${R}"
+            Write-Line "     ${G}PS> ${mk}ssh-keygen -t rsa -f $keysDisp/id_rsa${R}"
         }
         $n++
     }
