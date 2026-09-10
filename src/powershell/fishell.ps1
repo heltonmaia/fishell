@@ -118,8 +118,6 @@ function Set-Lang {
             FIRSTRUN='first run - follow the steps:'
             STEP_REGISTER='register your public key (your login comes by e-mail)'
             STEP_KEYGEN="create your ssh key (skip if you already have one)"
-            # so' o bash usa: o Colab nao roda o port PowerShell
-            EDIT_COLAB='open it in the Files panel (double-click) and edit'
             STEP_CONFIG='put that login in $NPAD_USER'
             STEP_RERUN='run again'; KEY_FOUND='your public key:'
             KEY_INVALID='this public key does not look valid - do NOT register it'
@@ -176,7 +174,6 @@ function Set-Lang {
             FIRSTRUN='primeira execução - siga os passos:'
             STEP_REGISTER='cadastre a chave pública (o login chega por e-mail)'
             STEP_KEYGEN='gere sua chave ssh (pule se já tiver uma)'
-            EDIT_COLAB='abra no painel Arquivos (2 cliques) e edite'
             STEP_CONFIG='ponha esse login em $NPAD_USER'
             STEP_RERUN='rode de novo'; KEY_FOUND='sua chave pública:'
             KEY_INVALID='esta chave pública não parece válida - NÃO cadastre ela'

@@ -1,7 +1,15 @@
 # Desenvolvimento
 
 Notas para quem for mexer no código. Para **usar** o fishell, veja o
-[README](../README.md).
+[README](../README.md), que vai do acesso ao NPAD na mão (parte 1) até o uso
+do Slurm (parte 6).
+
+Duas decisões do texto que é fácil desfazer sem querer: o README **começa pelo
+`ssh` cru**, sem o fishell, porque isso separa "meu acesso está ok?" de "a
+ferramenta está configurada?" — as duas metades ficaram indistinguíveis no uso
+real e custaram horas. E ele **não menciona o notebook do Colab** (células,
+`%cd`, painel Arquivos): tudo é feito pelo terminal, para as instruções valerem
+igual em Colab, Linux e WSL.
 
 ## Estrutura
 

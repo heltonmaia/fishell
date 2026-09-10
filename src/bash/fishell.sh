@@ -130,7 +130,6 @@ set_lang() {
         L_KEY_INVALID="this public key does not look valid — do NOT register it"
         L_KEY_FILE="file:"
         L_STEP_KEYGEN="create your ssh key (skip if you already have one)"
-        L_EDIT_COLAB="open in the Files panel (double-click):"
         L_STATUS_STEP="system readout"
         L_ST_USER="USER"; L_ST_HOST="HOST"; L_ST_PORT="PORT"
         L_ST_ALIAS="ALIAS"; L_ST_KEYS="KEYS_DIR"; L_ST_VERSION="VERSION"
@@ -189,7 +188,6 @@ set_lang() {
         L_KEY_INVALID="esta chave pública não parece válida — NÃO cadastre ela"
         L_KEY_FILE="arquivo:"
         L_STEP_KEYGEN="gere sua chave ssh (pule se já tiver uma)"
-        L_EDIT_COLAB="abra no painel Arquivos (2 cliques):"
         L_STATUS_STEP="configuração atual"
         L_ST_USER="USUÁRIO"; L_ST_HOST="HOST"; L_ST_PORT="PORTA"
         L_ST_ALIAS="ALIAS"; L_ST_KEYS="CHAVES"; L_ST_VERSION="VERSÃO"
@@ -331,12 +329,6 @@ load_config() {
     resolve_keys_dir
 }
 
-# O terminal do Colab nao tem nano, e o jeito natural de editar la' e' o
-# painel Arquivos. /content e' criado pela propria imagem do Colab.
-is_colab() {
-    [[ -n "${COLAB_RELEASE_TAG:-}" || -d /content ]]
-}
-
 resolve_keys_dir() {
     [[ -n "${SSH_KEYS_DIR:-}" ]] && return
     if [[ -d "/content/drive/MyDrive/visaocomputacional/.ssh" ]]; then
@@ -383,14 +375,10 @@ show_onboarding() {
     printf '  %b%d.%b %s\n     %bhttps://npad.ufrn.br/npad/primeirospassos%b\n' \
         "$YEL" "$n" "$C_RESET" "$L_STEP_REGISTER" "$CYA" "$C_RESET"
     n=$((n+1))
-    if is_colab; then
-        printf '  %b%d.%b %s\n     %b%s%b %b%s%b\n' \
-            "$YEL" "$n" "$C_RESET" "$L_STEP_CONFIG" \
-            "$G_DIM" "$L_EDIT_COLAB" "$C_RESET" "$G_BRIGHT" "$cfg" "$C_RESET"
-    else
-        printf '  %b%d.%b %s\n     %b$ nano %s%b\n' \
-            "$YEL" "$n" "$C_RESET" "$L_STEP_CONFIG" "$G" "$cfg" "$C_RESET"
-    fi
+    # Um `sed` em vez de sugerir editor: o terminal do Colab nao tem nano, e
+    # apontar o painel Arquivos so' serviria la'.
+    printf '  %b%d.%b %s\n     %b$ sed -i '"'"'s/seu_usuario_aqui/SEU_LOGIN/'"'"' %s%b\n' \
+        "$YEL" "$n" "$C_RESET" "$L_STEP_CONFIG" "$G" "$cfg" "$C_RESET"
     n=$((n+1))
     printf '  %b%d.%b %s\n     %b$ bash bin/fishell.sh%b\n\n' \
         "$YEL" "$n" "$C_RESET" "$L_STEP_RERUN" "$G" "$C_RESET"

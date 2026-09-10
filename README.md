@@ -91,9 +91,8 @@ Ele não substitui o que você fez acima: usa exatamente o mesmo `ssh` e o mesmo
 
 ## 3. Instalar o fishell
 
-**Google Colab** — use o **Terminal** (ícone no canto inferior esquerdo), não
-células. Monte o Drive antes, numa célula:
-`from google.colab import drive; drive.mount('/content/drive')`
+**Google Colab** — abra o **Terminal** (ícone no canto inferior esquerdo) e
+trabalhe por ele, com o Drive já montado. Daqui em diante é shell comum.
 
 ```bash
 cd /content/drive/MyDrive/SuaPasta
@@ -140,9 +139,14 @@ SSH_KEYS_DIR="/content/drive/MyDrive/SuaPasta/.ssh"
 
 ### Preencha seu login e rode
 
-Abra o `config.sh` e troque `seu_usuario_aqui` pelo login do NPAD. **No Colab**,
-dois cliques no arquivo pelo painel **Arquivos** — o terminal de lá não tem
-`nano`.
+Troque `seu_usuario_aqui` pelo login do NPAD:
+
+```bash
+sed -i 's/seu_usuario_aqui/SEU_LOGIN/' config.sh
+```
+
+(No macOS o `sed` pede um argumento a mais: `sed -i '' 's/.../.../'`. Ou abra
+no editor que preferir — é um shell script comum.)
 
 ```bash
 ./bin/fishell.sh setup     # instala as chaves e registra o alias npad
@@ -297,8 +301,8 @@ Dá para consultar sem abrir shell nenhum:
 | Problema | Solução |
 | --- | --- |
 | `Permission denied (publickey)` | Confira o login no `config.sh` e se a chave **pública** foi cadastrada |
+| Não acho a pasta `.ssh/` | Começa com ponto, então é oculta: `ls -a` |
 | `bad interpreter: Permission denied` | Falta permissão: `chmod +x bin/fishell.sh src/bash/fishell.sh` — ou, no Drive, use `bash bin/fishell.sh` |
-| Não acho a pasta `.ssh/` no painel do Colab | Ela é oculta: ligue o ícone de olho (*mostrar arquivos ocultos*) |
 | Conexão trava ou dá timeout | `./bin/fishell.sh test` mostra o erro do SSH e sugere a causa |
 | `Host key verification failed` | Falta o `known_hosts`, ou o servidor trocou de chave — veja abaixo |
 | O alias `npad` não foi registrado | Você já tinha um `Host npad` no `~/.ssh/config`. Remova o seu, ou troque `SSH_ALIAS` no `config.sh` |
