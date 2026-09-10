@@ -120,6 +120,9 @@ function Set-Lang {
             KEY_REMOVE='remove it by hand first if you really want a new one.'
             KEYGEN_FAIL='ssh-keygen failed'; KEY_CREATED='keypair created ->'
             APPEND_PUB='append this public key to'; THEN_SETUP="then run: bin\fishell.cmd setup"
+            CFG_LATER='config.ps1 not filled in yet - going ahead just to create the key'
+            REGISTER_PUB='register this public key at npad.ufrn.br (Primeiros Passos):'
+            THEN_CONFIG="then set `$NPAD_USER in config.ps1 and run: bin\fishell.cmd setup"
             STATUS_STEP='system readout'
             ST_USER='USER'; ST_HOST='HOST'; ST_PORT='PORT'
             ST_ALIAS='ALIAS'; ST_KEYS='KEYS_DIR'; ST_VERSION='VERSION'
@@ -172,6 +175,9 @@ function Set-Lang {
             KEY_REMOVE='apague à mão primeiro se quiser mesmo gerar outro.'
             KEYGEN_FAIL='o ssh-keygen falhou'; KEY_CREATED='par de chaves criado ->'
             APPEND_PUB='adicione esta chave pública em'; THEN_SETUP="depois rode: bin\fishell.cmd setup"
+            CFG_LATER='config.ps1 ainda não preenchido - seguindo só para criar a chave'
+            REGISTER_PUB='cadastre esta chave pública em npad.ufrn.br (Primeiros Passos):'
+            THEN_CONFIG="depois preencha `$NPAD_USER no config.ps1 e rode: bin\fishell.cmd setup"
             STATUS_STEP='configuração atual'
             ST_USER='USUÁRIO'; ST_HOST='HOST'; ST_PORT='PORTA'
             ST_ALIAS='ALIAS'; ST_KEYS='CHAVES'; ST_VERSION='VERSÃO'
@@ -188,7 +194,13 @@ $script:SSH_ALIAS = 'npad'
 $script:SSH_KEYS_DIR = ''
 $script:SetupOk = $false
 
+# -Lenient: nao aborta se $NPAD_USER ainda nao estiver preenchido. Usado pelo
+# `keygen`, que roda ANTES de o usuario ter conta no NPAD — exigir NPAD_USER ali
+# seria um impasse, ja que a chave e' pre-requisito do cadastro que gera o
+# usuario.
 function Load-Config {
+    param([switch]$Lenient)
+    $script:NPAD_USER_SET = $true
     $cfg = Join-Path $RepoRoot 'config.ps1'
     $example = Join-Path (Join-Path $RepoRoot 'config') 'config.ps1.example'
     if (-not (Test-Path $cfg)) {
@@ -196,21 +208,30 @@ function Load-Config {
         if (Test-Path $example) {
             Log-Info $L.CFG_COPY
             Copy-Item $example $cfg
-            Log-Warn ($L.CFG_EDIT -f $cfg)
-            Write-Line ""
-            Write-Line "  ${G}PS>${R} notepad $cfg"
-            Write-Line ""
-            exit 1
+            if ($Lenient) {
+                Log-Info $L.CFG_LATER
+            } else {
+                Log-Warn ($L.CFG_EDIT -f $cfg)
+                Write-Line ""
+                Write-Line "  ${G}PS>${R} notepad $cfg"
+                Write-Line ""
+                exit 1
+            }
         } else {
             Log-Err $L.CFG_NOTEMPLATE
             exit 1
         }
     }
-    . $cfg
+    if (Test-Path $cfg) { . $cfg }
     if ([string]::IsNullOrWhiteSpace($NPAD_USER) -or $NPAD_USER -eq 'seu_usuario_aqui') {
-        Log-Err $L.CFG_PLACEHOLDER
-        Log-Info "$($L.CFG_EDITPATH) $cfg"
-        exit 1
+        $script:NPAD_USER_SET = $false
+        if ($Lenient) {
+            $NPAD_USER = 'fishell'   # só compõe o comentário da chave
+        } else {
+            Log-Err $L.CFG_PLACEHOLDER
+            Log-Info "$($L.CFG_EDITPATH) $cfg"
+            exit 1
+        }
     }
     $script:NPAD_USER = $NPAD_USER
     if ($NPAD_HOST) { $script:NPAD_HOST = $NPAD_HOST }
@@ -451,7 +472,9 @@ function Action-Keygen {
         New-Item -ItemType Directory -Path $script:SSH_KEYS_DIR -Force | Out-Null
     }
     # -N '' = sem passphrase (o fluxo BatchMode/Colab depende disso).
-    & ssh-keygen -t rsa -b 4096 -N '' -C "$($script:NPAD_USER)@fishell" -f $key | Out-Null
+    # Sem conta ainda, o comentário é só "fishell" (não "fishell@fishell").
+    $comment = if ($script:NPAD_USER_SET) { "$($script:NPAD_USER)@fishell" } else { 'fishell' }
+    & ssh-keygen -t rsa -b 4096 -N '' -C $comment -f $key | Out-Null
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path $key)) {
         Log-Err $L.KEYGEN_FAIL
         return
@@ -459,10 +482,14 @@ function Action-Keygen {
     Restrict-KeyAcl $key
     Log-Ok "$($L.KEY_CREATED) $key"
     Write-Line ""
-    Write-Line "${GD}  $($L.APPEND_PUB) $($script:NPAD_USER)@$($script:NPAD_HOST):~/.ssh/authorized_keys${R}"
+    if ($script:NPAD_USER_SET) {
+        Write-Line "${GD}  $($L.APPEND_PUB) $($script:NPAD_USER)@$($script:NPAD_HOST):~/.ssh/authorized_keys${R}"
+    } else {
+        Write-Line "${GD}  $($L.REGISTER_PUB)${R}"
+    }
     Write-Line ""
     Write-Line "${GB}$(Get-Content "$key.pub" -Raw)${R}"
-    Log-Info $L.THEN_SETUP
+    if ($script:NPAD_USER_SET) { Log-Info $L.THEN_SETUP } else { Log-Info $L.THEN_CONFIG }
 }
 
 function Show-Status {
@@ -677,7 +704,8 @@ if ($Action -eq 'help') {
     exit 0
 }
 
-Load-Config
+# `keygen` roda antes de o usuário ter conta no NPAD (ver Load-Config).
+if ($Action -eq 'keygen') { Load-Config -Lenient } else { Load-Config }
 
 switch ($Action) {
     'setup'    { Animate-Intro; Setup-SSH }

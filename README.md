@@ -46,16 +46,14 @@ cd fishell
 ./bin/fishell.sh keygen        # gera .ssh/id_rsa e .ssh/id_rsa.pub e mostra a pública
 ```
 
-> **No Google Colab é diferente** — duas armadilhas do notebook:
-> `!cd` **não persiste** (cada linha `!` roda num subshell próprio, então use
-> `%cd`, que é magic do notebook), e o bit de execução não sobrevive ao mount
-> do Drive (então chame por `bash`, não `./`):
->
-> ```python
-> !git clone https://github.com/heltonmaia/fishell.git
-> %cd fishell
-> !bash bin/fishell.sh keygen
-> ```
+> **No Google Colab**, faça isso pelo **Terminal** (ícone no canto inferior
+> esquerdo) e não por células — lá os comandos acima funcionam como estão,
+> trocando `./bin/fishell.sh` por `bash bin/fishell.sh`. Veja
+> [Google Colab](#google-colab) abaixo.
+
+O `keygen` é o único comando que roda **sem** `config.sh` preenchido — de
+propósito: você ainda não tem usuário do NPAD neste ponto, e a chave é
+justamente o pré-requisito do cadastro que vai criar esse usuário.
 
 Ou, sem o fishell, o comando da documentação oficial: `ssh-keygen -t rsa`
 (dê enter em todas as perguntas), e depois `cat ~/.ssh/id_rsa.pub`.
@@ -117,35 +115,64 @@ notepad config.ps1          # edite $NPAD_USER
 
 ### Google Colab
 
-Guarde as chaves no seu Drive:
+O jeito mais simples é pelo **Terminal** do Colab, que é um shell de verdade —
+sem `!` e sem `%` na frente dos comandos.
 
-```
-Meu Drive/
-└── visaocomputacional/
-    └── .ssh/
-        ├── id_rsa
-        ├── id_rsa.pub
-        └── known_hosts
-```
-
-No notebook:
+**1. Monte o Drive.** Numa célula do notebook (ou pelo botão *Montar Drive* no
+painel **Arquivos**):
 
 ```python
 from google.colab import drive
 drive.mount('/content/drive')
-
-!git clone https://github.com/heltonmaia/fishell.git /content/fishell
-%cd /content/fishell
-!cp config/config.sh.example config.sh
-!sed -i 's/seu_usuario_aqui/SEU_USER/' config.sh
-!bash bin/fishell.sh setup
 ```
 
-O fishell acha `/content/drive/MyDrive/visaocomputacional/.ssh` sozinho quando
-`SSH_KEYS_DIR` está vazio. **Rode `setup` de novo toda vez que a VM do Colab
-reiniciar** — o `~/.ssh` da VM é descartado junto.
+**2. Abra o Terminal** — ícone no canto inferior esquerdo, ou
+*Tools → Terminal*.
 
-Para rodar algo no NPAD direto de uma célula, sem abrir o painel:
+**3. No terminal, é shell normal:**
+
+```bash
+cd /content/drive/MyDrive/SuaPasta          # onde você quer guardar o fishell
+git clone https://github.com/heltonmaia/fishell.git
+cd fishell
+
+bash bin/fishell.sh keygen                  # gera a chave; cadastre a pública no NPAD
+
+nano config.sh                              # troque seu_usuario_aqui pelo seu login
+bash bin/fishell.sh setup
+bash bin/fishell.sh                         # abre o painel
+```
+
+Use **`bash bin/fishell.sh`**, não `./bin/fishell.sh`: o Drive é um mount FUSE
+e o bit de execução do git nem sempre sobrevive lá.
+
+**Onde ficam as chaves.** Duas montagens funcionam:
+
+| | onde clonar | onde ficam as chaves | sobrevive ao restart da VM? |
+| --- | --- | --- | --- |
+| **repo no Drive** (mais simples) | `/content/drive/MyDrive/...` | `<repo>/.ssh/` | sim |
+| repo efêmero | `/content/fishell` | pasta do Drive, via `SSH_KEYS_DIR` no `config.sh` | sim, as chaves |
+
+De qualquer forma, **rode `bash bin/fishell.sh setup` toda vez que a VM do
+Colab reiniciar**: o `~/.ssh` da VM é descartado junto com ela, e é ele que o
+`ssh` consulta.
+
+> Se `SSH_KEYS_DIR` ficar vazio e existir
+> `/content/drive/MyDrive/visaocomputacional/.ssh`, o fishell usa essa pasta
+> automaticamente — é um atalho da turma de Visão Computacional, não uma
+> exigência.
+
+**Preferir células do notebook?** Funciona, mas atenção a duas armadilhas:
+`!cd` não persiste (cada `!` é um subshell — use `%cd`, que é magic do
+notebook), e vale o mesmo `bash` em vez de `./`:
+
+```python
+!git clone https://github.com/heltonmaia/fishell.git /content/fishell
+%cd /content/fishell
+!bash bin/fishell.sh keygen
+```
+
+Consultar a fila sem sair do notebook:
 
 ```python
 !bash bin/fishell.sh run "squeue -u SEU_USER"

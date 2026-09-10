@@ -125,6 +125,9 @@ set_lang() {
         L_KEY_REMOVE="remove it by hand first if you really want a new one."
         L_KEYGEN_FAIL="ssh-keygen failed"; L_KEY_CREATED="keypair created ->"
         L_APPEND_PUB="append this public key to"; L_THEN_SETUP="then run: ./bin/fishell.sh setup"
+        L_CFG_LATER="config.sh not filled in yet — going ahead just to create the key"
+        L_REGISTER_PUB="register this public key at npad.ufrn.br (Primeiros Passos):"
+        L_THEN_CONFIG="then set NPAD_USER in config.sh and run: ./bin/fishell.sh setup"
         L_STATUS_STEP="system readout"
         L_ST_USER="USER"; L_ST_HOST="HOST"; L_ST_PORT="PORT"
         L_ST_ALIAS="ALIAS"; L_ST_KEYS="KEYS_DIR"; L_ST_VERSION="VERSION"
@@ -178,6 +181,9 @@ set_lang() {
         L_KEY_REMOVE="apague à mão primeiro se quiser mesmo gerar outro."
         L_KEYGEN_FAIL="o ssh-keygen falhou"; L_KEY_CREATED="par de chaves criado ->"
         L_APPEND_PUB="adicione esta chave pública em"; L_THEN_SETUP="depois rode: ./bin/fishell.sh setup"
+        L_CFG_LATER="config.sh ainda não preenchido — seguindo só para criar a chave"
+        L_REGISTER_PUB="cadastre esta chave pública em npad.ufrn.br (Primeiros Passos):"
+        L_THEN_CONFIG="depois preencha NPAD_USER no config.sh e rode: ./bin/fishell.sh setup"
         L_STATUS_STEP="configuração atual"
         L_ST_USER="USUÁRIO"; L_ST_HOST="HOST"; L_ST_PORT="PORTA"
         L_ST_ALIAS="ALIAS"; L_ST_KEYS="CHAVES"; L_ST_VERSION="VERSÃO"
@@ -334,18 +340,28 @@ boot_sequence() {
 }
 
 # ─── Carrega configuração ─────────────────────────────────────
+# $1 = "lenient": nao aborta se NPAD_USER ainda nao estiver preenchido.
+# Usado pelo `keygen`, que roda ANTES de o usuario ter conta no NPAD — exigir
+# NPAD_USER ali seria um impasse, ja que a chave e' pre-requisito do cadastro
+# que gera o usuario.
 load_config() {
+    local lenient="${1:-}"
     local cfg="$REPO_ROOT/config.sh"
     local example="$REPO_ROOT/config/config.sh.example"
+    NPAD_USER_SET=1
 
     if [[ ! -f "$cfg" ]]; then
         log_warn "$L_CFG_NOTFOUND $cfg"
         if [[ -f "$example" ]]; then
             log_info "$L_CFG_COPY"
             cp "$example" "$cfg"
-            log_warn "$(printf "$L_CFG_EDIT" "$cfg")"
-            printf '\n  %b$%b nano %s\n\n' "$G" "$C_RESET" "$cfg"
-            exit 1
+            if [[ "$lenient" == "lenient" ]]; then
+                log_info "$L_CFG_LATER"
+            else
+                log_warn "$(printf "$L_CFG_EDIT" "$cfg")"
+                printf '\n  %b$%b nano %s\n\n' "$G" "$C_RESET" "$cfg"
+                exit 1
+            fi
         else
             log_err "$L_CFG_NOTEMPLATE"
             exit 1
@@ -355,7 +371,9 @@ load_config() {
     # shellcheck source=/dev/null
     source "$cfg"
 
-    : "${NPAD_USER:?NPAD_USER não definido em config.sh}"
+    if [[ -z "${NPAD_USER:-}" || "$NPAD_USER" == "seu_usuario_aqui" ]]; then
+        NPAD_USER_SET=0
+    fi
     : "${NPAD_HOST:=sc2.npad.ufrn.br}"
     : "${NPAD_PORT:=4422}"
     : "${SSH_ALIAS:=npad}"
@@ -364,10 +382,14 @@ load_config() {
     [[ -n "$FISHELL_LANG_ENV" ]] && FISHELL_LANG="$FISHELL_LANG_ENV"
     set_lang
 
-    if [[ "$NPAD_USER" == "seu_usuario_aqui" ]]; then
-        log_err "$L_CFG_PLACEHOLDER"
-        log_info "$L_CFG_EDITPATH $cfg"
-        exit 1
+    if [[ "$NPAD_USER_SET" == "0" ]]; then
+        if [[ "$lenient" == "lenient" ]]; then
+            NPAD_USER="fishell"   # só compõe o comentário da chave
+        else
+            log_err "$L_CFG_PLACEHOLDER"
+            log_info "$L_CFG_EDITPATH $cfg"
+            exit 1
+        fi
     fi
 
     if [[ -z "${SSH_KEYS_DIR:-}" ]]; then
@@ -550,17 +572,28 @@ action_keygen() {
     mkdir -p "$SSH_KEYS_DIR"
     chmod 700 "$SSH_KEYS_DIR"
     stty sane 2>/dev/null || true
-    if ! ssh-keygen -t rsa -b 4096 -N '' -C "${NPAD_USER}@fishell" -f "$key" >/dev/null; then
+    # Sem conta ainda, o comentario e' so "fishell" (nao "fishell@fishell").
+    local comment="fishell"
+    [[ "${NPAD_USER_SET:-1}" == "1" ]] && comment="${NPAD_USER}@fishell"
+    if ! ssh-keygen -t rsa -b 4096 -N '' -C "$comment" -f "$key" >/dev/null; then
         log_err "$L_KEYGEN_FAIL"
         return 1
     fi
     chmod 600 "$key"
     chmod 644 "$key.pub"
     log_ok "$L_KEY_CREATED $key"
-    printf '\n%b  %s %s@%s:~/.ssh/authorized_keys%b\n\n' \
-        "$G_DIM" "$L_APPEND_PUB" "$NPAD_USER" "$NPAD_HOST" "$C_RESET"
+    if [[ "${NPAD_USER_SET:-1}" == "0" ]]; then
+        printf '\n%b  %s%b\n\n' "$G_DIM" "$L_REGISTER_PUB" "$C_RESET"
+    else
+        printf '\n%b  %s %s@%s:~/.ssh/authorized_keys%b\n\n' \
+            "$G_DIM" "$L_APPEND_PUB" "$NPAD_USER" "$NPAD_HOST" "$C_RESET"
+    fi
     printf '%b%s%b\n\n' "$G_BRIGHT" "$(cat "$key.pub")" "$C_RESET"
-    log_info "$L_THEN_SETUP"
+    if [[ "${NPAD_USER_SET:-1}" == "0" ]]; then
+        log_info "$L_THEN_CONFIG"
+    else
+        log_info "$L_THEN_SETUP"
+    fi
 }
 
 show_status() {
@@ -757,7 +790,11 @@ main() {
 
     print_banner
     boot_sequence
-    load_config
+    if [[ "${1:-menu}" == "keygen" ]]; then
+        load_config lenient
+    else
+        load_config
+    fi
 
     case "${1:-menu}" in
         setup)    setup_ssh ;;
