@@ -110,7 +110,11 @@ set_lang() {
         L_ALIAS_KEPT="exists in ~/.ssh/config but was not created by fishell — kept as is"
         L_READY="payload ready. connect with:"
         L_PROBE="probing target"; L_HANDSHAKE="dispatching handshake (10s timeout)..."
-        L_TUNNEL_OK="tunnel established ::"; L_HANDSHAKE_FAIL="handshake failed. verify user, key, network."
+        L_TUNNEL_OK="tunnel established ::"; L_HANDSHAKE_FAIL="handshake failed:"
+        L_HINT_KEY="your public key is not registered at NPAD yet, or NPAD_USER is wrong"
+        L_HINT_HOSTKEY="the server host key changed — see the README"
+        L_HINT_NET="no route to the server — firewall, or port 4422 blocked"
+        L_HINT_DNS="could not resolve the host — check your connection"
         L_OPEN_SHELL="opening secure shell to"; L_EXIT_HINT="(type 'exit' to return to the control panel)"
         L_UPLOAD_STEP="upload // local -> npad"; L_DOWNLOAD_STEP="download // npad -> local"
         L_LOCAL_PATH="local path"; L_REMOTE_PATH="remote path"
@@ -126,6 +130,7 @@ set_lang() {
         L_KEY_INVALID="this public key does not look valid — do NOT register it"
         L_KEY_FILE="file:"
         L_STEP_KEYGEN="create your ssh key (skip if you already have one)"
+        L_EDIT_COLAB="open in the Files panel (double-click):"
         L_STATUS_STEP="system readout"
         L_ST_USER="USER"; L_ST_HOST="HOST"; L_ST_PORT="PORT"
         L_ST_ALIAS="ALIAS"; L_ST_KEYS="KEYS_DIR"; L_ST_VERSION="VERSION"
@@ -164,7 +169,11 @@ set_lang() {
         L_ALIAS_KEPT="já existe no ~/.ssh/config e não foi criado pelo fishell — mantido como está"
         L_READY="tudo pronto. conecte com:"
         L_PROBE="testando"; L_HANDSHAKE="enviando handshake (limite de 10s)..."
-        L_TUNNEL_OK="conexão estabelecida ::"; L_HANDSHAKE_FAIL="falhou. confira usuário, chave e rede."
+        L_TUNNEL_OK="conexão estabelecida ::"; L_HANDSHAKE_FAIL="falhou:"
+        L_HINT_KEY="sua chave pública ainda não está cadastrada no NPAD, ou o NPAD_USER está errado"
+        L_HINT_HOSTKEY="a host key do servidor mudou — veja o README"
+        L_HINT_NET="sem rota até o servidor — firewall, ou porta 4422 bloqueada"
+        L_HINT_DNS="não consegui resolver o host — confira sua conexão"
         L_OPEN_SHELL="abrindo shell em"; L_EXIT_HINT="(digite 'exit' para voltar ao painel)"
         L_UPLOAD_STEP="envio // local -> npad"; L_DOWNLOAD_STEP="download // npad -> local"
         L_LOCAL_PATH="caminho local"; L_REMOTE_PATH="caminho remoto"
@@ -180,6 +189,7 @@ set_lang() {
         L_KEY_INVALID="esta chave pública não parece válida — NÃO cadastre ela"
         L_KEY_FILE="arquivo:"
         L_STEP_KEYGEN="gere sua chave ssh (pule se já tiver uma)"
+        L_EDIT_COLAB="abra no painel Arquivos (2 cliques):"
         L_STATUS_STEP="configuração atual"
         L_ST_USER="USUÁRIO"; L_ST_HOST="HOST"; L_ST_PORT="PORTA"
         L_ST_ALIAS="ALIAS"; L_ST_KEYS="CHAVES"; L_ST_VERSION="VERSÃO"
@@ -321,6 +331,12 @@ load_config() {
     resolve_keys_dir
 }
 
+# O terminal do Colab nao tem nano, e o jeito natural de editar la' e' o
+# painel Arquivos. /content e' criado pela propria imagem do Colab.
+is_colab() {
+    [[ -n "${COLAB_RELEASE_TAG:-}" || -d /content ]]
+}
+
 resolve_keys_dir() {
     [[ -n "${SSH_KEYS_DIR:-}" ]] && return
     if [[ -d "/content/drive/MyDrive/visaocomputacional/.ssh" ]]; then
@@ -356,16 +372,25 @@ show_onboarding() {
             printf '  %b%s%b\n\n' "$G_DIM" "$pub" "$C_RESET"
         fi
     else
-        printf '  %b%d.%b %s\n     %b$ mkdir -p .ssh && ssh-keygen -t rsa -f .ssh/id_rsa%b\n' \
-            "$YEL" "$n" "$C_RESET" "$L_STEP_KEYGEN" "$G" "$C_RESET"
+        local keys_disp="$SSH_KEYS_DIR"
+        [[ "$PWD" == "$REPO_ROOT" ]] && keys_disp=".ssh"
+        printf '  %b%d.%b %s\n     %b$ mkdir -p %s && ssh-keygen -t rsa -f %s/id_rsa%b\n' \
+            "$YEL" "$n" "$C_RESET" "$L_STEP_KEYGEN" \
+            "$G" "$keys_disp" "$keys_disp" "$C_RESET"
         n=$((n+1))
     fi
 
     printf '  %b%d.%b %s\n     %bhttps://npad.ufrn.br/npad/primeirospassos%b\n' \
         "$YEL" "$n" "$C_RESET" "$L_STEP_REGISTER" "$CYA" "$C_RESET"
     n=$((n+1))
-    printf '  %b%d.%b %s\n     %b$ nano %s%b\n' \
-        "$YEL" "$n" "$C_RESET" "$L_STEP_CONFIG" "$G" "$cfg" "$C_RESET"
+    if is_colab; then
+        printf '  %b%d.%b %s\n     %b%s%b %b%s%b\n' \
+            "$YEL" "$n" "$C_RESET" "$L_STEP_CONFIG" \
+            "$G_DIM" "$L_EDIT_COLAB" "$C_RESET" "$G_BRIGHT" "$cfg" "$C_RESET"
+    else
+        printf '  %b%d.%b %s\n     %b$ nano %s%b\n' \
+            "$YEL" "$n" "$C_RESET" "$L_STEP_CONFIG" "$G" "$cfg" "$C_RESET"
+    fi
     n=$((n+1))
     printf '  %b%d.%b %s\n     %b$ bash bin/fishell.sh%b\n\n' \
         "$YEL" "$n" "$C_RESET" "$L_STEP_RERUN" "$G" "$C_RESET"
@@ -464,12 +489,26 @@ EOF
 test_connection() {
     log_step "$L_PROBE $NPAD_HOST:$NPAD_PORT"
     log_work "$L_HANDSHAKE"
-    if ssh -o ConnectTimeout=10 -o BatchMode=yes "$SSH_ALIAS" true 2>/dev/null; then
+    stty sane 2>/dev/null || true
+    local err
+    if err=$(ssh -o ConnectTimeout=10 -o BatchMode=yes "$SSH_ALIAS" true 2>&1); then
         log_ok "$L_TUNNEL_OK $NPAD_USER@$NPAD_HOST"
-    else
-        log_err "$L_HANDSHAKE_FAIL"
-        return 1
+        return 0
     fi
+
+    # Mostrar o erro cru do ssh e traduzi-lo: "confira usuario, chave e rede"
+    # nao diz qual dos tres, e o aluno fica sem saber por onde comecar.
+    log_err "$L_HANDSHAKE_FAIL"
+    [[ -n "$err" ]] && printf '%b  %s%b\n' "$G_DIM" "$err" "$C_RESET"
+    local hint=""
+    case "$err" in
+        *"Permission denied"*)              hint="$L_HINT_KEY" ;;
+        *"Host key verification failed"*)   hint="$L_HINT_HOSTKEY" ;;
+        *"Could not resolve"*)              hint="$L_HINT_DNS" ;;
+        *"timed out"*|*"Connection refused"*|*"No route to host"*) hint="$L_HINT_NET" ;;
+    esac
+    [[ -n "$hint" ]] && log_info "$hint"
+    return 1
 }
 
 action_login() {

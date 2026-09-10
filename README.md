@@ -73,11 +73,17 @@ Seu login chega por e-mail depois da aprovação.
 
 ### 3. Diga qual é o seu login
 
-```bash
-nano config.sh          # troque seu_usuario_aqui pelo login que chegou
-```
+Abra o `config.sh` e troque `seu_usuario_aqui` pelo login que chegou por
+e-mail.
+
+**No Colab**, dois cliques no arquivo pelo painel **Arquivos** (barra da
+esquerda) — o terminal do Colab não tem `nano`. Nas outras plataformas,
+`nano config.sh` ou o editor que preferir.
 
 Rode de novo e o painel abre. Pronto.
+
+> A pasta `.ssh/` começa com ponto, então é **oculta**: para vê-la no painel
+> Arquivos do Colab, ligue o ícone de olho (*mostrar arquivos ocultos*).
 
 No Colab, **repita o `setup` toda vez que a VM reiniciar** — o `~/.ssh` da
 máquina virtual é descartado junto com ela:
@@ -226,7 +232,8 @@ Dá para consultar sem abrir shell nenhum:
 | --- | --- |
 | `Permission denied (publickey)` | Confira o login no `config.sh` e se a chave **pública** foi cadastrada |
 | `bad interpreter: Permission denied` | Falta permissão: `chmod +x bin/fishell.sh src/bash/fishell.sh` — ou, no Drive, use `bash bin/fishell.sh` |
-| Conexão trava ou dá timeout | `./bin/fishell.sh test`; se falhar, verifique firewall e a porta 4422 |
+| Não acho a pasta `.ssh/` no painel do Colab | Ela é oculta: ligue o ícone de olho (*mostrar arquivos ocultos*) |
+| Conexão trava ou dá timeout | `./bin/fishell.sh test` mostra o erro do SSH e sugere a causa |
 | `Host key verification failed` | O servidor trocou de chave. Confirme com o NPAD e rode `ssh-keygen -R '[sc2.npad.ufrn.br]:4422'` |
 | O alias `npad` não foi registrado | Você já tinha um `Host npad` no `~/.ssh/config`. Remova o seu, ou troque `SSH_ALIAS` no `config.sh` |
 | No Colab, parou depois de um tempo | A VM reiniciou: `bash bin/fishell.sh setup` |

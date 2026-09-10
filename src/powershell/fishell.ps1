@@ -103,7 +103,11 @@ function Set-Lang {
             ALIAS_KEPT='exists in ~/.ssh/config but was not created by fishell - kept as is'
             READY='payload ready. connect with:'
             PROBE='probing target'; HANDSHAKE='dispatching handshake (10s timeout)...'
-            TUNNEL_OK='tunnel established ::'; HANDSHAKE_FAIL='handshake failed. verify user, key, network.'
+            TUNNEL_OK='tunnel established ::'; HANDSHAKE_FAIL='handshake failed:'
+            HINT_KEY='your public key is not registered at NPAD yet, or $NPAD_USER is wrong'
+            HINT_HOSTKEY='the server host key changed - see the README'
+            HINT_NET='no route to the server - firewall, or port 4422 blocked'
+            HINT_DNS='could not resolve the host - check your connection'
             OPEN_SHELL='opening secure shell to'; EXIT_HINT="(type 'exit' to return to the control panel)"
             UPLOAD_STEP='upload // local -> npad'; DOWNLOAD_STEP='download // npad -> local'
             LOCAL_PATH='local path'; REMOTE_PATH='remote path'
@@ -114,6 +118,8 @@ function Set-Lang {
             FIRSTRUN='first run - follow the steps:'
             STEP_REGISTER='register your public key (your login comes by e-mail)'
             STEP_KEYGEN="create your ssh key (skip if you already have one)"
+            # so' o bash usa: o Colab nao roda o port PowerShell
+            EDIT_COLAB='open it in the Files panel (double-click) and edit'
             STEP_CONFIG='put that login in $NPAD_USER'
             STEP_RERUN='run again'; KEY_FOUND='your public key:'
             KEY_INVALID='this public key does not look valid - do NOT register it'
@@ -155,7 +161,11 @@ function Set-Lang {
             ALIAS_KEPT='já existe no ~/.ssh/config e não foi criado pelo fishell - mantido como está'
             READY='tudo pronto. conecte com:'
             PROBE='testando'; HANDSHAKE='enviando handshake (limite de 10s)...'
-            TUNNEL_OK='conexão estabelecida ::'; HANDSHAKE_FAIL='falhou. confira usuário, chave e rede.'
+            TUNNEL_OK='conexão estabelecida ::'; HANDSHAKE_FAIL='falhou:'
+            HINT_KEY='sua chave pública ainda não está cadastrada no NPAD, ou o $NPAD_USER está errado'
+            HINT_HOSTKEY='a host key do servidor mudou - veja o README'
+            HINT_NET='sem rota até o servidor - firewall, ou porta 4422 bloqueada'
+            HINT_DNS='não consegui resolver o host - confira sua conexão'
             OPEN_SHELL='abrindo shell em'; EXIT_HINT="(digite 'exit' para voltar ao painel)"
             UPLOAD_STEP='envio // local -> npad'; DOWNLOAD_STEP='download // npad -> local'
             LOCAL_PATH='caminho local'; REMOTE_PATH='caminho remoto'
@@ -166,6 +176,7 @@ function Set-Lang {
             FIRSTRUN='primeira execução - siga os passos:'
             STEP_REGISTER='cadastre a chave pública (o login chega por e-mail)'
             STEP_KEYGEN='gere sua chave ssh (pule se já tiver uma)'
+            EDIT_COLAB='abra no painel Arquivos (2 cliques) e edite'
             STEP_CONFIG='ponha esse login em $NPAD_USER'
             STEP_RERUN='rode de novo'; KEY_FOUND='sua chave pública:'
             KEY_INVALID='esta chave pública não parece válida - NÃO cadastre ela'
@@ -429,12 +440,24 @@ function Restrict-KeyAcl {
 function Test-Connection-Npad {
     Log-Step "$($L.PROBE) $($script:NPAD_HOST):$($script:NPAD_PORT)"
     Log-Work $L.HANDSHAKE
-    & ssh -o ConnectTimeout=10 -o BatchMode=yes $script:SSH_ALIAS true 2>$null
+    $err = (& ssh -o ConnectTimeout=10 -o BatchMode=yes $script:SSH_ALIAS true 2>&1 | Out-String).Trim()
     if ($LASTEXITCODE -eq 0) {
         Log-Ok "$($L.TUNNEL_OK) $($script:NPAD_USER)@$($script:NPAD_HOST)"
-    } else {
-        Log-Err $L.HANDSHAKE_FAIL
+        return
     }
+
+    # Mostrar o erro cru do ssh e traduzi-lo: "confira usuario, chave e rede"
+    # nao diz qual dos tres, e o aluno fica sem saber por onde comecar.
+    Log-Err $L.HANDSHAKE_FAIL
+    if ($err) { Write-Line "${GD}  $err${R}" }
+    $hint = switch -Regex ($err) {
+        'Permission denied'            { $L.HINT_KEY;     break }
+        'Host key verification failed' { $L.HINT_HOSTKEY; break }
+        'Could not resolve'            { $L.HINT_DNS;     break }
+        'timed out|Connection refused|No route to host' { $L.HINT_NET; break }
+        default { $null }
+    }
+    if ($hint) { Log-Info $hint }
 }
 
 function Action-Login {
