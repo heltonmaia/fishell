@@ -131,7 +131,7 @@ set_lang() {
         L_KEY_FILE="file:"
         L_STEP_KEYGEN="create your ssh key"
         L_STEP_COPYKEY="copy the key you already have into this folder"
-        L_KEYS_DIR_MADE="keys folder created:"
+        L_PRIV_INPLACE="using the key already in ~/.ssh, nothing to copy"
         L_STATUS_STEP="system readout"
         L_ST_USER="USER"; L_ST_HOST="HOST"; L_ST_PORT="PORT"
         L_ST_ALIAS="ALIAS"; L_ST_KEYS="KEYS_DIR"; L_ST_VERSION="VERSION"
@@ -191,7 +191,7 @@ set_lang() {
         L_KEY_FILE="arquivo:"
         L_STEP_KEYGEN="gere sua chave ssh"
         L_STEP_COPYKEY="copie para cá a chave que você já tem"
-        L_KEYS_DIR_MADE="pasta de chaves criada:"
+        L_PRIV_INPLACE="usando a chave que já está em ~/.ssh, nada a copiar"
         L_STATUS_STEP="configuração atual"
         L_ST_USER="USUÁRIO"; L_ST_HOST="HOST"; L_ST_PORT="PORTA"
         L_ST_ALIAS="ALIAS"; L_ST_KEYS="CHAVES"; L_ST_VERSION="VERSÃO"
@@ -337,6 +337,12 @@ resolve_keys_dir() {
     [[ -n "${SSH_KEYS_DIR:-}" ]] && return
     if [[ -d "/content/drive/MyDrive/visaocomputacional/.ssh" ]]; then
         SSH_KEYS_DIR="/content/drive/MyDrive/visaocomputacional/.ssh"
+    elif [[ -f "$REPO_ROOT/.ssh/id_rsa" ]]; then
+        SSH_KEYS_DIR="$REPO_ROOT/.ssh"
+    elif [[ -f "$HOME/.ssh/id_rsa" ]]; then
+        # Ja' existe chave onde o ssh procura por padrao: usa ela em vez de
+        # pedir uma copia. So' falta escrever o alias.
+        SSH_KEYS_DIR="$HOME/.ssh"
     else
         SSH_KEYS_DIR="$REPO_ROOT/.ssh"
     fi
@@ -353,13 +359,6 @@ show_onboarding() {
     resolve_keys_dir
     local pub="$SSH_KEYS_DIR/id_rsa.pub"
     local n=1
-
-    # Cria a pasta de chaves: e' um passo a menos, e criar pasta oculta pelo
-    # painel de arquivos do Colab e' incomodo.
-    if [[ ! -d "$SSH_KEYS_DIR" ]] && mkdir -p "$SSH_KEYS_DIR" 2>/dev/null; then
-        chmod 700 "$SSH_KEYS_DIR" 2>/dev/null || true
-        log_ok "$L_KEYS_DIR_MADE $SSH_KEYS_DIR"
-    fi
 
     printf '\n%b  %s%b\n\n' "$G_BRIGHT$C_BOLD" "$L_FIRSTRUN" "$C_RESET"
 
@@ -383,11 +382,13 @@ show_onboarding() {
         if [[ -f "$HOME/.ssh/id_rsa" ]]; then
             # Ja' tem chave no ~/.ssh: copiar e' melhor que gerar outra, que
             # precisaria de um cadastro novo no NPAD.
-            printf '  %b%d.%b %s\n     %b$ cp ~/.ssh/id_rsa ~/.ssh/id_rsa.pub %s/%b\n' \
-                "$YEL" "$n" "$C_RESET" "$L_STEP_COPYKEY" "$G" "$keys_disp" "$C_RESET"
+            printf '  %b%d.%b %s\n     %b$ mkdir -p %s && cp ~/.ssh/id_rsa ~/.ssh/id_rsa.pub %s/%b\n' \
+                "$YEL" "$n" "$C_RESET" "$L_STEP_COPYKEY" \
+                "$G" "$keys_disp" "$keys_disp" "$C_RESET"
         else
-            printf '  %b%d.%b %s\n     %b$ ssh-keygen -t rsa -f %s/id_rsa%b\n' \
-                "$YEL" "$n" "$C_RESET" "$L_STEP_KEYGEN" "$G" "$keys_disp" "$C_RESET"
+            printf '  %b%d.%b %s\n     %b$ mkdir -p %s && ssh-keygen -t rsa -f %s/id_rsa%b\n' \
+                "$YEL" "$n" "$C_RESET" "$L_STEP_KEYGEN" \
+                "$G" "$keys_disp" "$keys_disp" "$C_RESET"
         fi
         n=$((n+1))
     fi
@@ -428,16 +429,24 @@ setup_ssh() {
         return 1
     fi
 
-    install -m 600 "$priv" "$home_ssh/id_rsa"
-    log_ok "$L_PRIV_OK"
+    # Com SSH_KEYS_DIR == ~/.ssh a origem e o destino sao o mesmo arquivo, e
+    # o install falharia. Nesse caso nao ha' o que copiar.
+    if [[ "$priv" -ef "$home_ssh/id_rsa" ]]; then
+        log_ok "$L_PRIV_INPLACE"
+    else
+        install -m 600 "$priv" "$home_ssh/id_rsa"
+        log_ok "$L_PRIV_OK"
+    fi
 
-    if [[ -f "$SSH_KEYS_DIR/id_rsa.pub" ]]; then
+    if [[ -f "$SSH_KEYS_DIR/id_rsa.pub" ]] \
+       && ! [[ "$SSH_KEYS_DIR/id_rsa.pub" -ef "$home_ssh/id_rsa.pub" ]]; then
         install -m 644 "$SSH_KEYS_DIR/id_rsa.pub" "$home_ssh/id_rsa.pub"
         log_ok "$L_PUB_OK"
     fi
 
     for kh in "$SSH_KEYS_DIR/known_hosts" "$SSH_KEYS_DIR/known_hosts.txt"; do
         if [[ -f "$kh" ]]; then
+            [[ "$kh" -ef "$home_ssh/known_hosts" ]] && break
             install -m 600 "$kh" "$home_ssh/known_hosts"
             log_ok "$L_KH_OK"
             break

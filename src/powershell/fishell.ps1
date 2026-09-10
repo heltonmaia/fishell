@@ -119,7 +119,7 @@ function Set-Lang {
             STEP_REGISTER='register your public key (your login comes by e-mail)'
             STEP_KEYGEN='create your ssh key'
             STEP_COPYKEY='copy the key you already have into this folder'
-            KEYS_DIR_MADE='keys folder created:'
+            PRIV_INPLACE='using the key already in ~/.ssh, nothing to copy'
             STEP_CONFIG='put that login in $NPAD_USER'
             STEP_RERUN='run again'; KEY_FOUND='your public key:'
             KEY_INVALID='this public key does not look valid - do NOT register it'
@@ -177,7 +177,7 @@ function Set-Lang {
             STEP_REGISTER='cadastre a chave pública (o login chega por e-mail)'
             STEP_KEYGEN='gere sua chave ssh'
             STEP_COPYKEY='copie para cá a chave que você já tem'
-            KEYS_DIR_MADE='pasta de chaves criada:'
+            PRIV_INPLACE='usando a chave que já está em ~/.ssh, nada a copiar'
             STEP_CONFIG='ponha esse login em $NPAD_USER'
             STEP_RERUN='rode de novo'; KEY_FOUND='sua chave pública:'
             KEY_INVALID='esta chave pública não parece válida - NÃO cadastre ela'
@@ -211,12 +211,6 @@ function Show-Onboarding {
     $pub = Join-Path $script:SSH_KEYS_DIR 'id_rsa.pub'
     $n = 1
 
-    # Cria a pasta de chaves: e' um passo a menos para o usuario.
-    if (-not (Test-Path $script:SSH_KEYS_DIR)) {
-        New-Item -ItemType Directory -Path $script:SSH_KEYS_DIR -Force | Out-Null
-        Log-Ok "$($L.KEYS_DIR_MADE) $($script:SSH_KEYS_DIR)"
-    }
-
     Write-Line ""
     Write-Line "  ${GB}${B}$($L.FIRSTRUN)${R}"
     Write-Line ""
@@ -248,10 +242,10 @@ function Show-Onboarding {
             # Ja' tem chave no ~/.ssh: copiar e' melhor que gerar outra, que
             # precisaria de um cadastro novo no NPAD.
             Write-Line "  ${YEL}$n.${R} $($L.STEP_COPYKEY)"
-            Write-Line "     ${G}PS> copy `$HOME\.ssh\id_rsa*  $keysDisp\${R}"
+            Write-Line "     ${G}PS> mkdir $keysDisp; copy `$HOME\.ssh\id_rsa*  $keysDisp\${R}"
         } else {
             Write-Line "  ${YEL}$n.${R} $($L.STEP_KEYGEN)"
-            Write-Line "     ${G}PS> ssh-keygen -t rsa -f $keysDisp/id_rsa${R}"
+            Write-Line "     ${G}PS> mkdir $keysDisp; ssh-keygen -t rsa -f $keysDisp/id_rsa${R}"
         }
         $n++
     }
@@ -301,10 +295,16 @@ function Load-Config {
     if ($FISHELL_LANG) { $script:FISHELL_LANG = $FISHELL_LANG }
     if ($script:FishellLangEnv) { $script:FISHELL_LANG = $script:FishellLangEnv }
     Set-Lang
-    if ([string]::IsNullOrWhiteSpace($SSH_KEYS_DIR)) {
-        $script:SSH_KEYS_DIR = Join-Path $RepoRoot '.ssh'
-    } else {
+    if (-not [string]::IsNullOrWhiteSpace($SSH_KEYS_DIR)) {
         $script:SSH_KEYS_DIR = $SSH_KEYS_DIR
+    } elseif (Test-Path (Join-Path $RepoRoot '.ssh/id_rsa')) {
+        $script:SSH_KEYS_DIR = Join-Path $RepoRoot '.ssh'
+    } elseif (Test-Path (Join-Path $HOME '.ssh/id_rsa')) {
+        # Ja' existe chave onde o ssh procura por padrao: usa ela em vez de
+        # pedir uma copia. So' falta escrever o alias.
+        $script:SSH_KEYS_DIR = Join-Path $HOME '.ssh'
+    } else {
+        $script:SSH_KEYS_DIR = Join-Path $RepoRoot '.ssh'
     }
 }
 
@@ -378,21 +378,32 @@ function Setup-SSH {
         return
     }
     $dstPriv = Join-Path $homeSsh 'id_rsa'
-    Copy-Item $priv $dstPriv -Force
-    Restrict-KeyAcl $dstPriv
-    Log-Ok $L.PRIV_OK
+    # Com SSH_KEYS_DIR == ~/.ssh a origem e o destino sao o mesmo arquivo, e o
+    # Copy-Item falharia. Nesse caso nao ha' o que copiar.
+    if ([IO.Path]::GetFullPath($priv) -eq [IO.Path]::GetFullPath($dstPriv)) {
+        Log-Ok $L.PRIV_INPLACE
+    } else {
+        Copy-Item $priv $dstPriv -Force
+        Restrict-KeyAcl $dstPriv
+        Log-Ok $L.PRIV_OK
+    }
 
     $pub = Join-Path $script:SSH_KEYS_DIR 'id_rsa.pub'
-    if (Test-Path $pub) {
-        Copy-Item $pub (Join-Path $homeSsh 'id_rsa.pub') -Force
+    $dstPub = Join-Path $homeSsh 'id_rsa.pub'
+    if ((Test-Path $pub) -and
+        ([IO.Path]::GetFullPath($pub) -ne [IO.Path]::GetFullPath($dstPub))) {
+        Copy-Item $pub $dstPub -Force
         Log-Ok $L.PUB_OK
     }
 
     foreach ($kh in @('known_hosts', 'known_hosts.txt')) {
         $p = Join-Path $script:SSH_KEYS_DIR $kh
         if (Test-Path $p) {
-            Copy-Item $p (Join-Path $homeSsh 'known_hosts') -Force
-            Log-Ok $L.KH_OK
+            $dstKh = Join-Path $homeSsh 'known_hosts'
+            if ([IO.Path]::GetFullPath($p) -ne [IO.Path]::GetFullPath($dstKh)) {
+                Copy-Item $p $dstKh -Force
+                Log-Ok $L.KH_OK
+            }
             break
         }
     }

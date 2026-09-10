@@ -42,7 +42,6 @@ $out = Invoke-Fishell
 Assert-Match $out 'siga os passos' 'roteiro'
 Assert-Match $out 'ssh-keygen -t rsa' 'instrucao do ssh-keygen'
 Assert-Match $out 'primeirospassos' 'link do cadastro'
-if (-not (Test-Path '.ssh')) { throw 'nao criou a pasta de chaves' }
 if (Test-Path '.ssh/id_rsa') { throw 'nao deveria ter gerado chave' }
 Remove-Item -Recurse -Force .ssh, config.ps1 -ErrorAction SilentlyContinue
 
@@ -53,7 +52,6 @@ New-Item -ItemType Directory -Path (Join-Path $HOME '.ssh') -Force | Out-Null
 & ssh-keygen -t rsa -b 2048 -N '' -f $homeKey | Out-Null
 $out = Invoke-Fishell
 Assert-Match $out 'copie para c' 'sugere copiar'
-if (-not (Test-Path .ssh)) { throw 'nao criou a pasta de chaves' }
 Remove-Item -Recurse -Force .ssh, config.ps1 -ErrorAction SilentlyContinue
 Remove-Item -Force $homeKey, "$homeKey.pub" -ErrorAction SilentlyContinue
 
