@@ -15,11 +15,10 @@ Comece pela **parte 1**: o acesso na mão, sem ferramenta nenhuma.
 ## Como funciona
 
 ```mermaid
-flowchart LR
+flowchart TB
     A["<b>Sua máquina</b><br/>código · dados"]
 
     subgraph NPAD["NPAD — sc2.npad.ufrn.br:4422"]
-        direction TB
         B["<b>nó de login</b><br/>editar · compilar · testar"]
         C["<b>nós de computação</b><br/>o treino roda aqui"]
         B -->|"<b>sbatch</b>"| C
