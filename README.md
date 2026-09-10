@@ -2,7 +2,7 @@
 
 Acesso rápido ao **NPAD/UFRN**, o supercomputador do IMD. Registra o alias
 `npad`, guarda suas chaves onde o Colab não apaga, e reúne conectar, enviar,
-baixar e rodar comando num painel — sem repetir `-p 4422` em tudo.
+baixar e rodar comando num painel — sem repetir `-p4422` em tudo.
 
 Comece pela **parte 1**: o acesso na mão, sem ferramenta nenhuma.
 
@@ -52,7 +52,7 @@ Seu login chega por e-mail depois da aprovação.
 ### Conecte
 
 ```bash
-ssh -p 4422 SEU_LOGIN@sc2.npad.ufrn.br
+ssh -p4422 SEU_LOGIN@sc2.npad.ufrn.br
 ```
 
 Deu certo? Você está no **nó de login**. Saia com `exit`.
@@ -60,8 +60,8 @@ Deu certo? Você está no **nó de login**. Saia com `exit`.
 Mandar e trazer arquivos é o mesmo endereço, com `-P` maiúsculo:
 
 ```bash
-scp -P 4422 dados.zip SEU_LOGIN@sc2.npad.ufrn.br:~/
-scp -P 4422 SEU_LOGIN@sc2.npad.ufrn.br:~/resultado.h5 .
+scp -P4422 dados.zip SEU_LOGIN@sc2.npad.ufrn.br:~/
+scp -P4422 SEU_LOGIN@sc2.npad.ufrn.br:~/resultado.h5 .
 ```
 
 > **No Google Colab tem um porém.** O `~/.ssh` fica na VM, que é descartada a
@@ -70,7 +70,7 @@ scp -P 4422 SEU_LOGIN@sc2.npad.ufrn.br:~/resultado.h5 .
 >
 > ```bash
 > ssh-keygen -t rsa -f /content/drive/MyDrive/SuaPasta/.ssh/id_rsa
-> ssh -i /content/drive/MyDrive/SuaPasta/.ssh/id_rsa -p 4422 SEU_LOGIN@sc2.npad.ufrn.br
+> ssh -i /content/drive/MyDrive/SuaPasta/.ssh/id_rsa -p4422 SEU_LOGIN@sc2.npad.ufrn.br
 > ```
 >
 > Funciona, mas você repete o `-i` e o `-p` em todo comando. É exatamente esse
@@ -82,16 +82,21 @@ scp -P 4422 SEU_LOGIN@sc2.npad.ufrn.br:~/resultado.h5 .
 
 Com o acesso funcionando, o que sobra é repetição:
 
-- `-p 4422` no `ssh` e `-P 4422` no `scp`, sempre;
+- `-p4422` no `ssh` e `-P4422` no `scp`, sempre;
 - no Colab, refazer a instalação da chave a cada reinício da VM;
 - `scp` com caminho longo dos dois lados toda vez que troca um arquivo.
 
-O fishell registra um alias `npad` no seu `~/.ssh/config` — a partir daí `ssh
-npad` basta, com ou sem ele — guarda suas chaves numa pasta que sobrevive ao
-Colab, e junta conectar, enviar, baixar e rodar comando num painel.
+A saída para a primeira é o **alias** — e a própria
+[documentação do NPAD](https://github.com/NPAD-UFRN/Tutorials) ensina isso:
+um bloco no `~/.ssh/config` com host, porta e usuário, para você digitar só
+`ssh super-pc`.
 
-Ele não substitui o que você fez acima: usa exatamente o mesmo `ssh` e o mesmo
-`scp`.
+O fishell escreve esse bloco para você (com o nome `npad`, configurável),
+guarda suas chaves numa pasta que sobrevive ao Colab, e junta conectar, enviar,
+baixar e rodar comando num painel.
+
+Ele não substitui o que você fez acima — usa exatamente o mesmo `ssh` e o mesmo
+`scp`, e depois do `setup` o `ssh npad` funciona mesmo sem ele.
 
 ---
 
@@ -328,7 +333,7 @@ ele usa `BatchMode` e não pode confirmar a identidade do servidor
 interativamente. Gere o arquivo e **confira** o que veio:
 
 ```bash
-ssh-keyscan -p 4422 sc2.npad.ufrn.br > .ssh/known_hosts 2>/dev/null
+ssh-keyscan -p4422 sc2.npad.ufrn.br > .ssh/known_hosts 2>/dev/null
 ssh-keygen -lf .ssh/known_hosts
 ```
 
