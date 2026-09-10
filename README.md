@@ -153,15 +153,20 @@ Copy-Item config\config.ps1.example config.ps1
 > No Colab use sempre `bash bin/fishell.sh`, nunca `./bin/fishell.sh`: o Drive
 > é montado sem permissão de execução, e o `chmod` ali não adianta.
 
-### Aponte para suas chaves
+### Onde estão suas chaves
 
-Aponte o `config.sh` para onde suas chaves já estão. É melhor que copiar, que
-deixaria a mesma chave privada em dois lugares:
+**No PC, nada a fazer.** A chave que você gerou na parte 1 está em `~/.ssh`, e
+o fishell usa ela de lá. Não copia nem gera outra.
+
+**No Colab, aponte para o Drive.** O `~/.ssh` fica na VM e some no reinício.
+Ponha as chaves numa pasta do Drive e diga onde, no `config.sh`:
 
 ```bash
-SSH_KEYS_DIR="$HOME/.ssh"                              # o caso comum
-SSH_KEYS_DIR="/content/drive/MyDrive/SuaPasta/.ssh"    # se gerou no Drive
+SSH_KEYS_DIR="/content/drive/MyDrive/SuaPasta/.ssh"
 ```
+
+Assim o `setup` reinstala as chaves a cada sessão nova a partir do Drive, e
+você não precisa cadastrar nada de novo no NPAD.
 
 ### Preencha seu login e rode
 

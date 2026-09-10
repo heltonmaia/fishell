@@ -46,16 +46,19 @@ jobs:
           rm -rf .ssh ob.txt config.sh
 
       # Ultima barreira antes de o aluno colar a chave no formulario do NPAD.
-      # Depois da parte 1 do tutorial a chave esta' no ~/.ssh, nao na pasta do
-      # fishell. Mandar gerar outra ali daria uma chave nao cadastrada.
-      - name: com chave no ~/.ssh, manda copiar em vez de gerar
+      # Com SSH_KEYS_DIR apontando pra uma pasta sem chave, mas havendo uma em
+      # ~/.ssh, o certo e' mandar copiar pra la' (e nao gerar outra, que nao
+      # estaria cadastrada no NPAD).
+      - name: pasta configurada e vazia, manda copiar a chave que existe
         run: |
           rm -f ~/.ssh/id_rsa ~/.ssh/id_rsa.pub
           mkdir -p ~/.ssh
           ssh-keygen -t rsa -b 2048 -N '' -f ~/.ssh/id_rsa >/dev/null
+          cp config/config.sh.example config.sh
+          sed -i "s|^SSH_KEYS_DIR=.*|SSH_KEYS_DIR=\"$RUNNER_TEMP/vazia/.ssh\"|" config.sh
           NO_COLOR=1 bash bin/fishell.sh > ob.txt 2>&1 || true
           grep -q 'copie para cá' ob.txt
-          rm -rf .ssh ob.txt config.sh ~/.ssh/id_rsa ~/.ssh/id_rsa.pub
+          rm -rf ob.txt config.sh ~/.ssh/id_rsa ~/.ssh/id_rsa.pub
 
       # SSH_KEYS_DIR customizado tem que ser respeitado tambem no roteiro: o
       # caminho curto ".ssh" mandaria gerar a chave onde o fishell nao procura.
