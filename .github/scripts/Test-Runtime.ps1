@@ -37,21 +37,24 @@ $env:FISHELL_LANG = 'en'
 Assert-Match (Invoke-Fishell @('help')) 'CONTROL PANEL' 'help en'
 $env:FISHELL_LANG = 'pt'
 
-Write-Host 'primeira execucao: gera a chave e mostra o roteiro'
+Write-Host 'primeira execucao: roteiro, sem gerar chave'
 $out = Invoke-Fishell
-Assert-Match $out 'faltam tr' 'roteiro'
+Assert-Match $out 'siga os passos' 'roteiro'
+Assert-Match $out 'ssh-keygen -t rsa' 'instrucao do ssh-keygen'
 Assert-Match $out 'primeirospassos' 'link do cadastro'
-if (-not (Test-Path '.ssh/id_rsa.pub')) { throw 'nao gerou a chave' }
-$pub = (Get-Content '.ssh/id_rsa.pub' -Raw).Trim()
-Assert-Match $pub '^ssh-rsa [A-Za-z0-9+/]{100,}=* fishell@' 'chave publica integra'
+if (Test-Path '.ssh') { throw 'nao deveria ter gerado chave' }
+Remove-Item -Force config.ps1 -ErrorAction SilentlyContinue
+
+Write-Host 'com chave existente: mostra a publica'
+New-Item -ItemType Directory -Path .ssh -Force | Out-Null
+& ssh-keygen -t rsa -b 2048 -N '' -f .ssh/id_rsa | Out-Null
+$out = Invoke-Fishell
+Assert-Match $out 'ssh-rsa ' 'mostra a publica'
 Remove-Item -Recurse -Force .ssh, config.ps1 -ErrorAction SilentlyContinue
 
-Write-Host 'keygen avulso'
-$out = Invoke-Fishell @('keygen')
-if (-not (Test-Path '.ssh/id_rsa.pub')) { Write-Host $out; throw 'keygen nao gerou a chave' }
-Assert-Match $out 'ssh-rsa ' 'keygen imprime a publica'
-
 Write-Host 'setup'
+New-Item -ItemType Directory -Path .ssh -Force | Out-Null
+& ssh-keygen -t rsa -b 2048 -N '' -f .ssh/id_rsa | Out-Null
 Copy-Item config/config.ps1.example config.ps1 -Force
 (Get-Content config.ps1) -replace 'seu_usuario_aqui', 'ci_user' | Set-Content config.ps1
 $out = Invoke-Fishell @('setup')

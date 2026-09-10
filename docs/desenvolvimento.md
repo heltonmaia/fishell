@@ -75,10 +75,12 @@ read-only, explodia no `keygen`) e `$null -notmatch` num `~/.ssh/config` vazio,
 que fazia o `setup` nunca registrar o alias no Windows. Por isso o CI
 **executa** o port PowerShell.
 
-**A chave pública vai colada num formulário oficial.** `validate_pubkey` /
-`Test-PubKey` conferem integridade antes de imprimir. Uma chave truncada
-cadastrada custa dias: o cadastro vai, o e-mail chega, e só na hora de conectar
-é que falha.
+**A chave pública vai colada num formulário oficial.** O fishell **não gera**
+a chave — isso é um `ssh-keygen -t rsa`, no terminal, como manda a documentação
+do NPAD. Mas ele *mostra* a pública para você copiar, e `validate_pubkey` /
+`Test-PubKey` conferem a integridade antes de imprimir: uma chave truncada
+cadastrada custa dias, porque o cadastro vai, o e-mail chega, e só na hora de
+conectar é que falha.
 
 **`clear` só em TTY.** Sem isso o `\033[H\033[2J` vaza cru na saída de pipe ou
 de célula de notebook, e o banner sai três vezes.
@@ -100,10 +102,11 @@ chaves, mesma ordem nos dois arquivos. **String nova entra nas quatro tabelas**
 
 ## O menu é deliberadamente enxuto
 
-O público são alunos acessando o NPAD pela primeira vez. A opção `forget`
-(`ssh-keygen -R`) foi removida de propósito: era um botão de "ignorar aviso de
-segurança" para um caso raro, e o README cobre o comando manual. A animação
-saiu porque poluía a saída no Colab. Não readicione opção ao painel sem uma
+O público são alunos acessando o NPAD pela primeira vez. Foram removidos de
+propósito: `forget` (`ssh-keygen -R`), que era um botão de "ignorar aviso de
+segurança" para um caso raro; a animação, que poluía a saída no Colab; e
+`keygen`, porque gerar chave é um `ssh-keygen` de uma linha e não precisa de
+embrulho — o fishell só mostra a pública já existente. Não readicione opção ao painel sem uma
 razão de uso real — o custo é cognitivo, não de código.
 
 ## Screenshots

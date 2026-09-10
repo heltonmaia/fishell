@@ -19,7 +19,7 @@
 param(
     [Parameter(Position = 0)]
     [ValidateSet('menu', 'setup', 'login', 'test', 'upload', 'download',
-                 'run', 'keygen', 'status', 'help', '')]
+                 'run', 'status', 'help', '')]
     [string]$Action = 'menu',
 
     [Parameter(Position = 1, ValueFromRemainingArguments = $true)]
@@ -27,7 +27,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$FishellVersion = '2.5'
+$FishellVersion = '2.6'
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 # O codigo vive em src/powershell/, mas config.ps1 e .ssh/ sao do usuario e
 # ficam na raiz do repo — dois niveis acima.
@@ -83,7 +83,6 @@ function Set-Lang {
             M5_T='exec remote command';  M5_H='( one-shot )'
             M6_T='redeploy ssh payload'; M6_H='( re-setup )'
             M7_T='system readout';       M7_H='( status )'
-            M8_T='generate keypair';     M8_H='( ssh-keygen )'
             ML_T='language'
             M0_T='logout';               M0_H='( exit )'
             PROMPT='select option'; PAUSE='press ENTER to return to control panel... '
@@ -97,7 +96,7 @@ function Set-Lang {
             SETUP_INIT='initializing ssh payload for user'
             KEYS_NOTFOUND='keys directory not found:'; KEYS_CHECK='check $SSH_KEYS_DIR in config.ps1'
             PRIV_NOTFOUND='private key not found in'; PRIV_EXPECT='expected: id_rsa (or id_rsa.txt)'
-            PRIV_KEYGEN="run 'bin\fishell.cmd keygen' to create one"
+            PRIV_KEYGEN='create one with: ssh-keygen -t rsa -f .ssh/id_rsa'
             PRIV_OK='private key deployed -> ~/.ssh/id_rsa'
             PUB_OK='public key deployed -> ~/.ssh/id_rsa.pub'; KH_OK='known_hosts deployed'
             ALIAS_UPD='updated in ~/.ssh/config'; ALIAS_REG='registered in ~/.ssh/config'
@@ -112,19 +111,13 @@ function Set-Lang {
             TRANSFER_OK='transfer complete'; TRANSFER_FAIL='transfer failed'
             REMOTE_EXEC='remote exec //'; CMD='cmd'; EMPTY_CMD='empty command, aborted.'
             STDOUT_BEGIN='─── remote stdout ───'; STDOUT_END='─── end ─────────────'
-            KEYGEN_STEP='generating ssh keypair in'; KEY_EXISTS='keypair already exists:'
-            KEY_REMOVE='remove it by hand first if you really want a new one.'
-            KEYGEN_FAIL='ssh-keygen failed'; KEY_CREATED='keypair created ->'
-            APPEND_PUB='append this public key to'; THEN_SETUP="then run: bin\fishell.cmd setup"
-            CFG_LATER='config.ps1 not filled in yet - going ahead just to create the key'
-            FIRSTRUN='three steps to go:'
-            STEP_REGISTER='register the public key above (your login comes by e-mail)'
+            FIRSTRUN='first run - follow the steps:'
+            STEP_REGISTER='register your public key (your login comes by e-mail)'
+            STEP_KEYGEN="create your ssh key (skip if you already have one)"
             STEP_CONFIG='put that login in $NPAD_USER'
-            STEP_RERUN='run again'; KEY_FOUND='using the key you already have:'
-            KEY_INVALID='the generated key did not pass validation - do NOT register it'
-            KEY_FILE='also saved at:'
-            REGISTER_PUB='register this public key at npad.ufrn.br (Primeiros Passos):'
-            THEN_CONFIG="then set `$NPAD_USER in config.ps1 and run: bin\fishell.cmd setup"
+            STEP_RERUN='run again'; KEY_FOUND='your public key:'
+            KEY_INVALID='this public key does not look valid - do NOT register it'
+            KEY_FILE='file:'
             STATUS_STEP='system readout'
             ST_USER='USER'; ST_HOST='HOST'; ST_PORT='PORT'
             ST_ALIAS='ALIAS'; ST_KEYS='KEYS_DIR'; ST_VERSION='VERSION'
@@ -142,7 +135,6 @@ function Set-Lang {
             M5_T='executar comando';    M5_H='( uma vez )'
             M6_T='reinstalar chaves';   M6_H='( refazer )'
             M7_T='ver configuração';    M7_H='( status )'
-            M8_T='gerar par de chaves'; M8_H='( ssh-keygen )'
             ML_T='idioma'
             M0_T='sair';                M0_H='( exit )'
             PROMPT='escolha uma opção'; PAUSE='tecle ENTER para voltar ao painel... '
@@ -156,7 +148,7 @@ function Set-Lang {
             SETUP_INIT='preparando o ssh para o usuário'
             KEYS_NOTFOUND='pasta de chaves não encontrada:'; KEYS_CHECK='confira $SSH_KEYS_DIR no config.ps1'
             PRIV_NOTFOUND='chave privada não encontrada em'; PRIV_EXPECT='esperado: id_rsa (ou id_rsa.txt)'
-            PRIV_KEYGEN="rode 'bin\fishell.cmd keygen' para gerar uma"
+            PRIV_KEYGEN='gere uma com: ssh-keygen -t rsa -f .ssh/id_rsa'
             PRIV_OK='chave privada instalada -> ~/.ssh/id_rsa'
             PUB_OK='chave pública instalada -> ~/.ssh/id_rsa.pub'; KH_OK='known_hosts instalado'
             ALIAS_UPD='atualizado no ~/.ssh/config'; ALIAS_REG='registrado no ~/.ssh/config'
@@ -171,19 +163,13 @@ function Set-Lang {
             TRANSFER_OK='transferência concluída'; TRANSFER_FAIL='a transferência falhou'
             REMOTE_EXEC='comando remoto //'; CMD='comando'; EMPTY_CMD='comando vazio, cancelado.'
             STDOUT_BEGIN='─── saída remota ────'; STDOUT_END='─── fim ─────────────'
-            KEYGEN_STEP='gerando par de chaves em'; KEY_EXISTS='já existe um par de chaves:'
-            KEY_REMOVE='apague à mão primeiro se quiser mesmo gerar outro.'
-            KEYGEN_FAIL='o ssh-keygen falhou'; KEY_CREATED='par de chaves criado ->'
-            APPEND_PUB='adicione esta chave pública em'; THEN_SETUP="depois rode: bin\fishell.cmd setup"
-            CFG_LATER='config.ps1 ainda não preenchido - seguindo só para criar a chave'
-            FIRSTRUN='agora faltam três passos:'
-            STEP_REGISTER='cadastre a chave pública acima (o login chega por e-mail)'
+            FIRSTRUN='primeira execução - siga os passos:'
+            STEP_REGISTER='cadastre a chave pública (o login chega por e-mail)'
+            STEP_KEYGEN='gere sua chave ssh (pule se já tiver uma)'
             STEP_CONFIG='ponha esse login em $NPAD_USER'
-            STEP_RERUN='rode de novo'; KEY_FOUND='usando a chave que já existe:'
-            KEY_INVALID='a chave gerada não passou na validação - NÃO cadastre esta'
-            KEY_FILE='também está em:'
-            REGISTER_PUB='cadastre esta chave pública em npad.ufrn.br (Primeiros Passos):'
-            THEN_CONFIG="depois preencha `$NPAD_USER no config.ps1 e rode: bin\fishell.cmd setup"
+            STEP_RERUN='rode de novo'; KEY_FOUND='sua chave pública:'
+            KEY_INVALID='esta chave pública não parece válida - NÃO cadastre ela'
+            KEY_FILE='arquivo:'
             STATUS_STEP='configuração atual'
             ST_USER='USUÁRIO'; ST_HOST='HOST'; ST_PORT='PORTA'
             ST_ALIAS='ALIAS'; ST_KEYS='CHAVES'; ST_VERSION='VERSÃO'
@@ -210,30 +196,41 @@ function Show-Onboarding {
     $script:NPAD_USER_SET = $false
     if ((Get-Location).Path -eq $RepoRoot) { $Cfg = 'config.ps1' }
     if (-not $script:SSH_KEYS_DIR) { $script:SSH_KEYS_DIR = Join-Path $RepoRoot '.ssh' }
-    $key = Join-Path $script:SSH_KEYS_DIR 'id_rsa'
+    $pub = Join-Path $script:SSH_KEYS_DIR 'id_rsa.pub'
+    $n = 1
 
-    # A chave e' pre-requisito de qualquer caminho, entao gera aqui mesmo em vez
-    # de mandar o aluno rodar `keygen` so' pra voltar a este ponto.
-    if (Test-Path $key) {
-        Write-Line ""
-        Write-Line "${GD}  $($L.KEY_FOUND)${R}"
-        Write-Line ""
-        Write-Line "${GB}$(Get-Content "$key.pub" -Raw)${R}"
-        Write-Line "${GD}  $($L.KEY_FILE) $key.pub${R}"
-        Write-Line ""
-    } else {
-        $script:Onboarding = $true
-        Action-Keygen
-        $script:Onboarding = $false
-    }
-
+    Write-Line ""
     Write-Line "  ${GB}${B}$($L.FIRSTRUN)${R}"
     Write-Line ""
-    Write-Line "  ${YEL}1.${R} $($L.STEP_REGISTER)"
+
+    if (Test-Path $pub) {
+        # Ja' tem chave: mostra a publica pra copiar, conferindo a integridade
+        # antes — ela vai colada num formulario oficial do NPAD.
+        if (Test-PubKey $pub) {
+            Write-Line "  ${GD}$($L.KEY_FOUND)${R}"
+            Write-Line ""
+            Write-Line "${GB}$((Get-Content $pub -Raw).Trim())${R}"
+            Write-Line ""
+            Write-Line "  ${GD}$($L.KEY_FILE) $pub${R}"
+            Write-Line ""
+        } else {
+            Log-Err $L.KEY_INVALID
+            Write-Line "  ${GD}$pub${R}"
+            Write-Line ""
+        }
+    } else {
+        Write-Line "  ${YEL}$n.${R} $($L.STEP_KEYGEN)"
+        Write-Line "     ${G}PS> mkdir .ssh; ssh-keygen -t rsa -f .ssh/id_rsa${R}"
+        $n++
+    }
+
+    Write-Line "  ${YEL}$n.${R} $($L.STEP_REGISTER)"
     Write-Line "     ${CYA}https://npad.ufrn.br/npad/primeirospassos${R}"
-    Write-Line "  ${YEL}2.${R} $($L.STEP_CONFIG)"
+    $n++
+    Write-Line "  ${YEL}$n.${R} $($L.STEP_CONFIG)"
     Write-Line "     ${G}PS> notepad $Cfg${R}"
-    Write-Line "  ${YEL}3.${R} $($L.STEP_RERUN)"
+    $n++
+    Write-Line "  ${YEL}$n.${R} $($L.STEP_RERUN)"
     Write-Line "     ${G}PS> bin\fishell.cmd${R}"
     Write-Line ""
 }
@@ -243,7 +240,6 @@ function Show-Onboarding {
 # seria um impasse, ja que a chave e' pre-requisito do cadastro que gera o
 # usuario.
 function Load-Config {
-    param([switch]$Lenient)
     $script:NPAD_USER_SET = $true
     $cfg = Join-Path $RepoRoot 'config.ps1'
     $example = Join-Path (Join-Path $RepoRoot 'config') 'config.ps1.example'
@@ -252,12 +248,8 @@ function Load-Config {
         if (Test-Path $example) {
             Log-Info $L.CFG_COPY
             Copy-Item $example $cfg
-            if ($Lenient) {
-                Log-Info $L.CFG_LATER
-            } else {
-                Show-Onboarding $cfg
-                exit 1
-            }
+            Show-Onboarding $cfg
+            exit 1
         } else {
             Log-Err $L.CFG_NOTEMPLATE
             exit 1
@@ -266,12 +258,8 @@ function Load-Config {
     if (Test-Path $cfg) { . $cfg }
     if ([string]::IsNullOrWhiteSpace($NPAD_USER) -or $NPAD_USER -eq 'seu_usuario_aqui') {
         $script:NPAD_USER_SET = $false
-        if ($Lenient) {
-            $NPAD_USER = 'fishell'   # só compõe o comentário da chave
-        } else {
-            Show-Onboarding $cfg
-            exit 1
-        }
+        Show-Onboarding $cfg
+        exit 1
     }
     $script:NPAD_USER = $NPAD_USER
     if ($NPAD_HOST) { $script:NPAD_HOST = $NPAD_HOST }
@@ -509,53 +497,6 @@ function Test-PubKey {
     return ($LASTEXITCODE -eq 0)
 }
 
-function Action-Keygen {
-    Log-Step "$($L.KEYGEN_STEP) $($script:SSH_KEYS_DIR)"
-    $key = Join-Path $script:SSH_KEYS_DIR 'id_rsa'
-    if (Test-Path $key) {
-        Log-Warn "$($L.KEY_EXISTS) $key"
-        Log-Info $L.KEY_REMOVE
-        return
-    }
-    if (-not (Test-Path $script:SSH_KEYS_DIR)) {
-        New-Item -ItemType Directory -Path $script:SSH_KEYS_DIR -Force | Out-Null
-    }
-    # -N '' = sem passphrase (o fluxo BatchMode/Colab depende disso).
-    # O comentário da chave serve pra distinguir as chaves na lista do NPAD,
-    # então identifica a MÁQUINA de origem, não o tool.
-    # NAO usar $host: e' variavel automatica do PowerShell (read-only).
-    $machine = if ($env:COMPUTERNAME) { $env:COMPUTERNAME } else { 'local' }
-    $comment = "fishell@$machine"
-    & ssh-keygen -t rsa -b 4096 -N '' -C $comment -f $key | Out-Null
-    if ($LASTEXITCODE -ne 0 -or -not (Test-Path $key)) {
-        Log-Err $L.KEYGEN_FAIL
-        return
-    }
-    Restrict-KeyAcl $key
-    # Esta pública vai ser colada num formulário oficial do NPAD: valida antes
-    # de mostrar, pra ninguém cadastrar uma chave truncada ou malformada.
-    if (-not (Test-PubKey "$key.pub")) {
-        Log-Err $L.KEY_INVALID
-        return
-    }
-    Log-Ok "$($L.KEY_CREATED) $key"
-    Write-Line ""
-    if ($script:Onboarding) {
-        # No roteiro de 1a execucao quem imprime os proximos passos e' ele.
-    } elseif ($script:NPAD_USER_SET) {
-        Write-Line "${GD}  $($L.APPEND_PUB) $($script:NPAD_USER)@$($script:NPAD_HOST):~/.ssh/authorized_keys${R}"
-        Write-Line ""
-    } else {
-        Write-Line "${GD}  $($L.REGISTER_PUB)${R}"
-        Write-Line ""
-    }
-    Write-Line "${GB}$(Get-Content "$key.pub" -Raw)${R}"
-    Write-Line "${GD}  $($L.KEY_FILE) $key.pub${R}"
-    Write-Line ""
-    if ($script:Onboarding) { return }
-    if ($script:NPAD_USER_SET) { Log-Info $L.THEN_SETUP } else { Log-Info $L.THEN_CONFIG }
-}
-
 function Show-Status {
     Log-Step $L.STATUS_STEP
     $line = '─' * 50
@@ -588,13 +529,12 @@ ${GB}COMMANDS${R}
   ${G}upload${R}     scp file/folder to npad (interactive)
   ${G}download${R}   scp file/folder from npad (interactive)
   ${G}run${R} <cmd>  run one command on npad and print the output
-  ${G}keygen${R}     generate a new keypair in the keys dir
   ${G}status${R}     show current configuration
   ${G}help${R}       display this panel
 
 ${GB}CONTROL PANEL${R}
   ${G}1${R} shell    ${G}2${R} test     ${G}3${R} upload   ${G}4${R} download
-  ${G}5${R} run      ${G}6${R} setup    ${G}7${R} status   ${G}8${R} keygen
+  ${G}5${R} run      ${G}6${R} setup    ${G}7${R} status
   ${G}l${R} language                          ${G}0${R}/${G}q${R} exit
 
 ${GB}ENV${R}
@@ -620,13 +560,12 @@ ${GB}COMANDOS${R}
   ${G}upload${R}     envia arquivo/pasta pro npad (interativo)
   ${G}download${R}   baixa arquivo/pasta do npad (interativo)
   ${G}run${R} <cmd>  roda um comando no npad e mostra a saída
-  ${G}keygen${R}     gera um par de chaves novo
   ${G}status${R}     mostra a configuração atual
   ${G}help${R}       mostra esta ajuda
 
 ${GB}PAINEL${R}
   ${G}1${R} shell    ${G}2${R} testar   ${G}3${R} enviar   ${G}4${R} baixar
-  ${G}5${R} comando  ${G}6${R} setup    ${G}7${R} config   ${G}8${R} chaves
+  ${G}5${R} comando  ${G}6${R} setup    ${G}7${R} config
   ${G}l${R} idioma                            ${G}0${R}/${G}q${R} sair
 
 ${GB}AMBIENTE${R}
@@ -676,13 +615,12 @@ function Draw-Panel {
     Panel-Row $YEL '[5]' $L.M5_T $L.M5_H
     Panel-Row $YEL '[6]' $L.M6_T $L.M6_H
     Panel-Row $YEL '[7]' $L.M7_T $L.M7_H
-    Panel-Row $YEL '[8]' $L.M8_T $L.M8_H
     Panel-Row $CYA '[l]' $L.ML_T "( $($script:FISHELL_LANG) )"
     Panel-Row $RED '[0]' $L.M0_T $L.M0_H
     Write-Line "${G}╚══════════════════════════════════════════════════╝${R}"
     # Prompt pede a opção em vez de imitar um shell: um "fishell@npad:~#"
     # dá a impressão de que dá pra digitar comando ali.
-    Write-Raw "`n  ${G}>${R} ${GB}$($L.PROMPT)${R} ${GD}[1-8, l, 0]${R} : "
+    Write-Raw "`n  ${G}>${R} ${GB}$($L.PROMPT)${R} ${GD}[1-7, l, 0]${R} : "
 }
 
 # Lê 1 tecla (sem ENTER). Sem TTY, lê uma linha e devolve '0' no EOF, para
@@ -722,7 +660,6 @@ function Menu-Loop {
             '^5$'                  { Action-RunRemote;     Pause-Return }
             '^6$'                  { Setup-SSH;            Pause-Return }
             '^7$'                  { Show-Status;          Pause-Return }
-            '^8$'                  { Action-Keygen;        Pause-Return }
             '^[lL]$' {
                 $script:FISHELL_LANG = if ($script:FISHELL_LANG -eq 'en') { 'pt' } else { 'en' }
                 $env:FISHELL_LANG = $script:FISHELL_LANG
@@ -750,8 +687,7 @@ if ($Action -eq 'help') {
     exit 0
 }
 
-# `keygen` roda antes de o usuário ter conta no NPAD (ver Load-Config).
-if ($Action -eq 'keygen') { Load-Config -Lenient } else { Load-Config }
+Load-Config
 
 switch ($Action) {
     'setup'    { Print-Logo; Setup-SSH }
@@ -760,7 +696,6 @@ switch ($Action) {
     'upload'   { Print-Logo; Action-Upload }
     'download' { Print-Logo; Action-Download }
     'run'      { Print-Logo; Action-RunRemote -Command ($Rest -join ' ') }
-    'keygen'   { Print-Logo; Action-Keygen }
     'status'   { Print-Logo; Show-Status }
     default    {
         Print-Logo

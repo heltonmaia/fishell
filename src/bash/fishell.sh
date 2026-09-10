@@ -9,7 +9,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # O codigo vive em src/bash/, mas config.sh e .ssh/ sao do usuario e ficam na
 # raiz do repo — dois niveis acima.
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-FISHELL_VERSION="2.5"
+FISHELL_VERSION="2.6"
 
 # Idioma escolhido pelo ambiente vence o do config.sh; guardado antes de
 # sourcear a config justamente pra poder reaplicar depois.
@@ -88,7 +88,6 @@ set_lang() {
         L_M5_T="exec remote command";  L_M5_H="( one-shot )"
         L_M6_T="redeploy ssh payload"; L_M6_H="( re-setup )"
         L_M7_T="system readout";       L_M7_H="( status )"
-        L_M8_T="generate keypair";     L_M8_H="( ssh-keygen )"
         L_ML_T="language"
         L_M0_T="logout";               L_M0_H="( exit )"
         L_PROMPT="select option"
@@ -104,7 +103,7 @@ set_lang() {
         L_SETUP_INIT="initializing ssh payload for user"
         L_KEYS_NOTFOUND="keys directory not found:"; L_KEYS_CHECK="check SSH_KEYS_DIR in config.sh"
         L_PRIV_NOTFOUND="private key not found in"; L_PRIV_EXPECT="expected: id_rsa (or id_rsa.txt)"
-        L_PRIV_KEYGEN="run './bin/fishell.sh keygen' to create one"
+        L_PRIV_KEYGEN="create one with: ssh-keygen -t rsa -f .ssh/id_rsa"
         L_PRIV_OK="private key deployed -> ~/.ssh/id_rsa"
         L_PUB_OK="public key deployed -> ~/.ssh/id_rsa.pub"; L_KH_OK="known_hosts deployed"
         L_ALIAS_UPD="updated in ~/.ssh/config"; L_ALIAS_REG="registered in ~/.ssh/config"
@@ -119,20 +118,14 @@ set_lang() {
         L_TRANSFER_OK="transfer complete"; L_TRANSFER_FAIL="transfer failed"
         L_REMOTE_EXEC="remote exec //"; L_CMD="cmd"; L_EMPTY_CMD="empty command, aborted."
         L_STDOUT_BEGIN="─── remote stdout ───"; L_STDOUT_END="─── end ─────────────"
-        L_KEYGEN_STEP="generating ssh keypair in"; L_KEY_EXISTS="keypair already exists:"
-        L_KEY_REMOVE="remove it by hand first if you really want a new one."
-        L_KEYGEN_FAIL="ssh-keygen failed"; L_KEY_CREATED="keypair created ->"
-        L_APPEND_PUB="append this public key to"; L_THEN_SETUP="then run: ./bin/fishell.sh setup"
-        L_CFG_LATER="config.sh not filled in yet — going ahead just to create the key"
-        L_FIRSTRUN="three steps to go:"
-        L_STEP_REGISTER="register the public key above (your login comes by e-mail)"
+        L_FIRSTRUN="first run — follow the steps:"
+        L_STEP_REGISTER="register your public key (your login comes by e-mail)"
         L_STEP_CONFIG="put that login in NPAD_USER"
         L_STEP_RERUN="run again"
-        L_KEY_FOUND="using the key you already have:"
-        L_KEY_INVALID="the generated key did not pass validation — do NOT register it"
-        L_KEY_FILE="also saved at:"
-        L_REGISTER_PUB="register this public key at npad.ufrn.br (Primeiros Passos):"
-        L_THEN_CONFIG="then set NPAD_USER in config.sh and run: ./bin/fishell.sh setup"
+        L_KEY_FOUND="your public key:"
+        L_KEY_INVALID="this public key does not look valid — do NOT register it"
+        L_KEY_FILE="file:"
+        L_STEP_KEYGEN="create your ssh key (skip if you already have one)"
         L_STATUS_STEP="system readout"
         L_ST_USER="USER"; L_ST_HOST="HOST"; L_ST_PORT="PORT"
         L_ST_ALIAS="ALIAS"; L_ST_KEYS="KEYS_DIR"; L_ST_VERSION="VERSION"
@@ -149,7 +142,6 @@ set_lang() {
         L_M5_T="executar comando";    L_M5_H="( uma vez )"
         L_M6_T="reinstalar chaves";   L_M6_H="( refazer )"
         L_M7_T="ver configuração";    L_M7_H="( status )"
-        L_M8_T="gerar par de chaves"; L_M8_H="( ssh-keygen )"
         L_ML_T="idioma"
         L_M0_T="sair";                L_M0_H="( exit )"
         L_PROMPT="escolha uma opção"
@@ -165,7 +157,7 @@ set_lang() {
         L_SETUP_INIT="preparando o ssh para o usuário"
         L_KEYS_NOTFOUND="pasta de chaves não encontrada:"; L_KEYS_CHECK="confira SSH_KEYS_DIR no config.sh"
         L_PRIV_NOTFOUND="chave privada não encontrada em"; L_PRIV_EXPECT="esperado: id_rsa (ou id_rsa.txt)"
-        L_PRIV_KEYGEN="rode './bin/fishell.sh keygen' para gerar uma"
+        L_PRIV_KEYGEN="gere uma com: ssh-keygen -t rsa -f .ssh/id_rsa"
         L_PRIV_OK="chave privada instalada -> ~/.ssh/id_rsa"
         L_PUB_OK="chave pública instalada -> ~/.ssh/id_rsa.pub"; L_KH_OK="known_hosts instalado"
         L_ALIAS_UPD="atualizado no ~/.ssh/config"; L_ALIAS_REG="registrado no ~/.ssh/config"
@@ -180,20 +172,14 @@ set_lang() {
         L_TRANSFER_OK="transferência concluída"; L_TRANSFER_FAIL="a transferência falhou"
         L_REMOTE_EXEC="comando remoto //"; L_CMD="comando"; L_EMPTY_CMD="comando vazio, cancelado."
         L_STDOUT_BEGIN="─── saída remota ────"; L_STDOUT_END="─── fim ─────────────"
-        L_KEYGEN_STEP="gerando par de chaves em"; L_KEY_EXISTS="já existe um par de chaves:"
-        L_KEY_REMOVE="apague à mão primeiro se quiser mesmo gerar outro."
-        L_KEYGEN_FAIL="o ssh-keygen falhou"; L_KEY_CREATED="par de chaves criado ->"
-        L_APPEND_PUB="adicione esta chave pública em"; L_THEN_SETUP="depois rode: ./bin/fishell.sh setup"
-        L_CFG_LATER="config.sh ainda não preenchido — seguindo só para criar a chave"
-        L_FIRSTRUN="agora faltam três passos:"
-        L_STEP_REGISTER="cadastre a chave pública acima (o login chega por e-mail)"
+        L_FIRSTRUN="primeira execução — siga os passos:"
+        L_STEP_REGISTER="cadastre a chave pública (o login chega por e-mail)"
         L_STEP_CONFIG="ponha esse login em NPAD_USER"
         L_STEP_RERUN="rode de novo"
-        L_KEY_FOUND="usando a chave que já existe:"
-        L_KEY_INVALID="a chave gerada não passou na validação — NÃO cadastre esta"
-        L_KEY_FILE="também está em:"
-        L_REGISTER_PUB="cadastre esta chave pública em npad.ufrn.br (Primeiros Passos):"
-        L_THEN_CONFIG="depois preencha NPAD_USER no config.sh e rode: ./bin/fishell.sh setup"
+        L_KEY_FOUND="sua chave pública:"
+        L_KEY_INVALID="esta chave pública não parece válida — NÃO cadastre ela"
+        L_KEY_FILE="arquivo:"
+        L_STEP_KEYGEN="gere sua chave ssh (pule se já tiver uma)"
         L_STATUS_STEP="configuração atual"
         L_ST_USER="USUÁRIO"; L_ST_HOST="HOST"; L_ST_PORT="PORTA"
         L_ST_ALIAS="ALIAS"; L_ST_KEYS="CHAVES"; L_ST_VERSION="VERSÃO"
@@ -295,12 +281,7 @@ menu_prompt_read() {
 }
 
 # ─── Carrega configuração ─────────────────────────────────────
-# $1 = "lenient": nao aborta se NPAD_USER ainda nao estiver preenchido.
-# Usado pelo `keygen`, que roda ANTES de o usuario ter conta no NPAD — exigir
-# NPAD_USER ali seria um impasse, ja que a chave e' pre-requisito do cadastro
-# que gera o usuario.
 load_config() {
-    local lenient="${1:-}"
     local cfg="$REPO_ROOT/config.sh"
     local example="$REPO_ROOT/config/config.sh.example"
     NPAD_USER_SET=1
@@ -310,12 +291,8 @@ load_config() {
         if [[ -f "$example" ]]; then
             log_info "$L_CFG_COPY"
             cp "$example" "$cfg"
-            if [[ "$lenient" == "lenient" ]]; then
-                log_info "$L_CFG_LATER"
-            else
-                show_onboarding "$cfg"
-                exit 1
-            fi
+            show_onboarding "$cfg"
+            exit 1
         else
             log_err "$L_CFG_NOTEMPLATE"
             exit 1
@@ -337,12 +314,8 @@ load_config() {
     set_lang
 
     if [[ "$NPAD_USER_SET" == "0" ]]; then
-        if [[ "$lenient" == "lenient" ]]; then
-            NPAD_USER="fishell"   # só compõe o comentário da chave
-        else
-            show_onboarding "$cfg"
-            exit 1
-        fi
+        show_onboarding "$cfg"
+        exit 1
     fi
 
     resolve_keys_dir
@@ -362,32 +335,40 @@ resolve_keys_dir() {
 # um login do NPAD — ele so' existe depois de cadastrar a chave publica.
 show_onboarding() {
     local cfg="$1"
-    # Por definicao so' chegamos aqui sem usuario configurado. No caminho
-    # "config.sh nao existe" a marcacao ainda nao rodou (ela vem depois do
-    # source), e sem isto o comentario da chave sairia "@fishell".
-    NPAD_USER_SET=0
     # Na raiz do repo mostra so' "config.sh": o caminho absoluto do Colab e'
     # enorme e nao cabe na linha.
     [[ "$PWD" == "$REPO_ROOT" ]] && cfg="config.sh"
     resolve_keys_dir
+    local pub="$SSH_KEYS_DIR/id_rsa.pub"
+    local n=1
 
-    # A chave e' pre-requisito de qualquer caminho, entao gera aqui mesmo em
-    # vez de mandar o aluno rodar `keygen` so' pra voltar a este ponto.
-    if [[ -f "$SSH_KEYS_DIR/id_rsa" ]]; then
-        printf '\n%b  %s%b\n\n' "$G_DIM" "$L_KEY_FOUND" "$C_RESET"
-        printf '%b%s%b\n\n' "$G_BRIGHT" "$(cat "$SSH_KEYS_DIR/id_rsa.pub" 2>/dev/null)" "$C_RESET"
-        printf '%b  %s %s%b\n\n' "$G_DIM" "$L_KEY_FILE" "$SSH_KEYS_DIR/id_rsa.pub" "$C_RESET"
+    printf '\n%b  %s%b\n\n' "$G_BRIGHT$C_BOLD" "$L_FIRSTRUN" "$C_RESET"
+
+    if [[ -f "$pub" ]]; then
+        # Ja' tem chave: mostra a publica pra copiar, conferindo a integridade
+        # antes — ela vai colada num formulario oficial do NPAD.
+        if validate_pubkey "$pub"; then
+            printf '  %b%s%b\n\n' "$G_DIM" "$L_KEY_FOUND" "$C_RESET"
+            printf '%b%s%b\n\n' "$G_BRIGHT" "$(cat "$pub")" "$C_RESET"
+            printf '  %b%s %s%b\n\n' "$G_DIM" "$L_KEY_FILE" "$pub" "$C_RESET"
+        else
+            log_err "$L_KEY_INVALID"
+            printf '  %b%s%b\n\n' "$G_DIM" "$pub" "$C_RESET"
+        fi
     else
-        ONBOARDING=1 action_keygen || return 1
+        printf '  %b%d.%b %s\n     %b$ mkdir -p .ssh && ssh-keygen -t rsa -f .ssh/id_rsa%b\n' \
+            "$YEL" "$n" "$C_RESET" "$L_STEP_KEYGEN" "$G" "$C_RESET"
+        n=$((n+1))
     fi
 
-    printf '%b  %s%b\n\n' "$G_BRIGHT$C_BOLD" "$L_FIRSTRUN" "$C_RESET"
-    printf '  %b1.%b %s\n     %bhttps://npad.ufrn.br/npad/primeirospassos%b\n' \
-        "$YEL" "$C_RESET" "$L_STEP_REGISTER" "$CYA" "$C_RESET"
-    printf '  %b2.%b %s\n     %b$ nano %s%b\n' \
-        "$YEL" "$C_RESET" "$L_STEP_CONFIG" "$G" "$cfg" "$C_RESET"
-    printf '  %b3.%b %s\n     %b$ bash bin/fishell.sh%b\n\n' \
-        "$YEL" "$C_RESET" "$L_STEP_RERUN" "$G" "$C_RESET"
+    printf '  %b%d.%b %s\n     %bhttps://npad.ufrn.br/npad/primeirospassos%b\n' \
+        "$YEL" "$n" "$C_RESET" "$L_STEP_REGISTER" "$CYA" "$C_RESET"
+    n=$((n+1))
+    printf '  %b%d.%b %s\n     %b$ nano %s%b\n' \
+        "$YEL" "$n" "$C_RESET" "$L_STEP_CONFIG" "$G" "$cfg" "$C_RESET"
+    n=$((n+1))
+    printf '  %b%d.%b %s\n     %b$ bash bin/fishell.sh%b\n\n' \
+        "$YEL" "$n" "$C_RESET" "$L_STEP_RERUN" "$G" "$C_RESET"
 }
 
 # ─── Setup SSH ────────────────────────────────────────────────
@@ -560,57 +541,6 @@ validate_pubkey() {
     ssh-keygen -lf "$pub" >/dev/null 2>&1 || return 1
 }
 
-action_keygen() {
-    log_step "$L_KEYGEN_STEP $SSH_KEYS_DIR"
-    local key="$SSH_KEYS_DIR/id_rsa"
-    if [[ -f "$key" ]]; then
-        log_warn "$L_KEY_EXISTS $key"
-        log_info "$L_KEY_REMOVE"
-        return 1
-    fi
-    mkdir -p "$SSH_KEYS_DIR"
-    chmod 700 "$SSH_KEYS_DIR"
-    stty sane 2>/dev/null || true
-    # O comentario da chave serve pra distinguir as chaves na lista do NPAD,
-    # entao identifica a MAQUINA de origem, nao o tool.
-    local host
-    if [[ -n "${COLAB_RELEASE_TAG:-}" || -d /content/drive ]]; then
-        host="colab"
-    else
-        host="$(hostname -s 2>/dev/null || echo local)"
-    fi
-    local comment="fishell@${host}"
-    if ! ssh-keygen -t rsa -b 4096 -N '' -C "$comment" -f "$key" >/dev/null; then
-        log_err "$L_KEYGEN_FAIL"
-        return 1
-    fi
-    chmod 600 "$key"
-    chmod 644 "$key.pub"
-    # Esta pública vai ser colada num formulário oficial do NPAD: valida antes
-    # de mostrar, pra ninguém cadastrar uma chave truncada ou malformada.
-    if ! validate_pubkey "$key.pub"; then
-        log_err "$L_KEY_INVALID"
-        return 1
-    fi
-    log_ok "$L_KEY_CREATED $key"
-    if [[ "${ONBOARDING:-0}" == "1" ]]; then
-        printf '\n'
-    elif [[ "${NPAD_USER_SET:-1}" == "0" ]]; then
-        printf '\n%b  %s%b\n\n' "$G_DIM" "$L_REGISTER_PUB" "$C_RESET"
-    else
-        printf '\n%b  %s %s@%s:~/.ssh/authorized_keys%b\n\n' \
-            "$G_DIM" "$L_APPEND_PUB" "$NPAD_USER" "$NPAD_HOST" "$C_RESET"
-    fi
-    printf '%b%s%b\n\n' "$G_BRIGHT" "$(cat "$key.pub")" "$C_RESET"
-    printf '%b  %s %s%b\n\n' "$G_DIM" "$L_KEY_FILE" "$key.pub" "$C_RESET"
-    [[ "${ONBOARDING:-0}" == "1" ]] && return 0
-    if [[ "${NPAD_USER_SET:-1}" == "0" ]]; then
-        log_info "$L_THEN_CONFIG"
-    else
-        log_info "$L_THEN_SETUP"
-    fi
-}
-
 show_status() {
     log_step "$L_STATUS_STEP"
     hline 50 ─
@@ -639,13 +569,12 @@ ${G_BRIGHT}COMMANDS${C_RESET}
   ${G}upload${C_RESET}     scp file/folder to npad (interactive)
   ${G}download${C_RESET}   scp file/folder from npad (interactive)
   ${G}run${C_RESET} <cmd>  run one command on npad and print the output
-  ${G}keygen${C_RESET}     generate a new keypair in the keys dir
   ${G}status${C_RESET}     show current configuration
   ${G}help${C_RESET}       display this panel
 
 ${G_BRIGHT}CONTROL PANEL${C_RESET}
   ${G}1${C_RESET} shell    ${G}2${C_RESET} test     ${G}3${C_RESET} upload   ${G}4${C_RESET} download
-  ${G}5${C_RESET} run      ${G}6${C_RESET} setup    ${G}7${C_RESET} status   ${G}8${C_RESET} keygen
+  ${G}5${C_RESET} run      ${G}6${C_RESET} setup    ${G}7${C_RESET} status
   ${G}l${C_RESET} language                          ${G}0${C_RESET}/${G}q${C_RESET} exit
 
 ${G_BRIGHT}ENV${C_RESET}
@@ -670,13 +599,12 @@ ${G_BRIGHT}COMANDOS${C_RESET}
   ${G}upload${C_RESET}     envia arquivo/pasta pro npad (interativo)
   ${G}download${C_RESET}   baixa arquivo/pasta do npad (interativo)
   ${G}run${C_RESET} <cmd>  roda um comando no npad e mostra a saída
-  ${G}keygen${C_RESET}     gera um par de chaves novo
   ${G}status${C_RESET}     mostra a configuração atual
   ${G}help${C_RESET}       mostra esta ajuda
 
 ${G_BRIGHT}PAINEL${C_RESET}
   ${G}1${C_RESET} shell    ${G}2${C_RESET} testar   ${G}3${C_RESET} enviar   ${G}4${C_RESET} baixar
-  ${G}5${C_RESET} comando  ${G}6${C_RESET} setup    ${G}7${C_RESET} config   ${G}8${C_RESET} chaves
+  ${G}5${C_RESET} comando  ${G}6${C_RESET} setup    ${G}7${C_RESET} config
   ${G}l${C_RESET} idioma                            ${G}0${C_RESET}/${G}q${C_RESET} sair
 
 ${G_BRIGHT}AMBIENTE${C_RESET}
@@ -752,14 +680,13 @@ menu() {
         _row "$YEL" "[5]" "$L_M5_T" "$L_M5_H"
         _row "$YEL" "[6]" "$L_M6_T" "$L_M6_H"
         _row "$YEL" "[7]" "$L_M7_T" "$L_M7_H"
-        _row "$YEL" "[8]" "$L_M8_T" "$L_M8_H"
         _row "$CYA" "[l]" "$L_ML_T" "( $FISHELL_LANG )"
         _row "$RED" "[0]" "$L_M0_T" "$L_M0_H"
         printf '%b╚══════════════════════════════════════════════════╝%b\n' "$G" "$C_RESET"
         local opt
         # Prompt pede a opção em vez de imitar um shell: um "fishell@npad:~#"
         # dá a impressão de que dá pra digitar comando ali.
-        printf '\n  %b>%b %b%s%b %b[1-8, l, 0]%b : ' \
+        printf '\n  %b>%b %b%s%b %b[1-7, l, 0]%b : ' \
             "$G" "$C_RESET" "$G_BRIGHT" "$L_PROMPT" "$C_RESET" "$G_DIM" "$C_RESET"
         menu_prompt_read opt
         redraw
@@ -771,7 +698,6 @@ menu() {
             5|05) action_run_remote; pause_return ;;
             6|06) setup_ssh;        pause_return ;;
             7|07) show_status;      pause_return ;;
-            8|08) action_keygen;     pause_return ;;
             l|L)
                 if [[ "$FISHELL_LANG" == "en" ]]; then FISHELL_LANG=pt; else FISHELL_LANG=en; fi
                 export FISHELL_LANG
@@ -796,11 +722,7 @@ main() {
     esac
 
     print_logo
-    if [[ "${1:-menu}" == "keygen" ]]; then
-        load_config lenient
-    else
-        load_config
-    fi
+    load_config
 
     case "${1:-menu}" in
         setup)    setup_ssh ;;
@@ -809,7 +731,6 @@ main() {
         upload)   action_upload ;;
         download) action_download ;;
         run)      shift; action_run_remote "$@" ;;
-        keygen)   action_keygen ;;
         status)   show_status ;;
         menu)
             if ! grep -q "^Host $SSH_ALIAS\$" "$HOME/.ssh/config" 2>/dev/null; then

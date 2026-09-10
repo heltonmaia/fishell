@@ -47,11 +47,18 @@ cd fishell
 > No Colab use sempre `bash bin/fishell.sh`, nunca `./bin/fishell.sh`: o Drive
 > é montado sem permissão de execução, e o `chmod` ali não adianta.
 
-### 2. Cadastre a chave
+### 2. Gere e cadastre sua chave
 
-Na primeira execução o fishell gera sua chave e mostra a **pública**. Copie e
-cadastre em **[npad.ufrn.br → Primeiros Passos](https://npad.ufrn.br/npad/primeirospassos)**.
-O NPAD exige chave do tipo RSA — é a que ele gera.
+O NPAD exige uma chave **RSA**. Se você ainda não tem uma, gere no terminal —
+dê enter em todas as perguntas:
+
+```bash
+mkdir -p .ssh
+ssh-keygen -t rsa -f .ssh/id_rsa
+```
+
+Rode o fishell de novo: ele mostra sua chave **pública**. Copie e cadastre em
+**[npad.ufrn.br → Primeiros Passos](https://npad.ufrn.br/npad/primeirospassos)**.
 
 Seu login chega por e-mail depois da aprovação.
 
@@ -88,7 +95,6 @@ Cada tecla é uma ação — não precisa dar ENTER.
 | `5` | roda **um** comando no NPAD e mostra a saída |
 | `6` | refaz a configuração do SSH |
 | `7` | mostra a configuração atual |
-| `8` | gera um par de chaves novo |
 | `l` | troca o idioma (pt ⇄ en) |
 | `0` | sai |
 
