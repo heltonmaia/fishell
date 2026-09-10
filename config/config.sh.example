@@ -2,8 +2,10 @@
 #  FISHELL — Configuração do usuário (Linux / macOS / WSL / Colab)
 #  Copie este arquivo para `config.sh` e edite os valores abaixo.
 #
-#      cp config.sh.example config.sh
-#      nano config.sh
+#      cp config/config.sh.example config.sh
+#
+#  E edite. No Colab, 2 cliques no arquivo pelo painel Arquivos — o terminal
+#  de lá não tem `nano`.
 #
 #  O arquivo `config.sh` é ignorado pelo Git (nunca é commitado).
 # ═══════════════════════════════════════════════════════════════
@@ -15,12 +17,18 @@ NPAD_USER="seu_usuario_aqui"
 NPAD_HOST="sc2.npad.ufrn.br"
 NPAD_PORT="4422"
 
-# Pasta onde estão as chaves SSH (id_rsa, id_rsa.pub, known_hosts)
+# Pasta onde estão as chaves SSH (id_rsa, id_rsa.pub, known_hosts).
 #
-#   - No Google Colab:   /content/drive/MyDrive/visaocomputacional/.ssh
-#   - Local (padrão):    $(pwd)/.ssh   → a pasta .ssh ao lado do script
+# Vazio = a pasta `.ssh` na RAIZ do repositório fishell, ou seja ao lado deste
+# `config.sh`. Note que NÃO é o diretório de onde você chamou o script.
 #
-# Deixe vazio para auto-detectar (Colab primeiro, depois pasta local).
+# Preencha se as chaves estiverem em outro lugar. No Colab costuma valer a pena
+# guardá-las fora do repo, assim elas sobrevivem a um clone novo:
+#
+#   SSH_KEYS_DIR="/content/drive/MyDrive/Classes/2026.2_DL/npad/.ssh"
+#
+# (Se ficar vazio e existir /content/drive/MyDrive/visaocomputacional/.ssh, essa
+# pasta é usada — atalho antigo da turma de Visão Computacional.)
 SSH_KEYS_DIR=""
 
 # Alias SSH usado no comando `ssh <alias>` (padrão: npad)
