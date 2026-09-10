@@ -15,7 +15,7 @@ Comece pela **parte 1**: o acesso na mão, sem ferramenta nenhuma.
 ## Como funciona
 
 ```mermaid
-flowchart TB
+flowchart LR
     A["<b>Sua máquina</b><br/>código · dados"]
 
     subgraph NPAD["NPAD · sc2.npad.ufrn.br:4422"]
