@@ -57,7 +57,7 @@ jobs:
           NO_COLOR=1 bash bin/fishell.sh > ob.txt 2>&1 || true
           grep -q 'ssh-rsa ' ob.txt
           grep -q 'primeirospassos' ob.txt
-          rm -rf .ssh ob.txt config.sh
+          rm -f .ssh/id_rsa* ob.txt config.sh
 
       # Ultima barreira antes de o aluno colar a chave no formulario do NPAD.
       # Com SSH_KEYS_DIR apontando pra uma pasta sem chave, mas havendo uma em
@@ -94,6 +94,7 @@ jobs:
           ssh-keygen -t rsa -b 2048 -N '' -f ~/.ssh/id_rsa >/dev/null
           cp config/config.sh.example config.sh
           sed -i 's/seu_usuario_aqui/ci_user/' config.sh
+          sed -i 's|^SSH_KEYS_DIR=.*|SSH_KEYS_DIR=""|' config.sh   # vazio: acha sozinho
           NO_COLOR=1 ./bin/fishell.sh setup | tee st.txt
           grep -q 'nada a copiar' st.txt
           grep -q '^Host npad$' ~/.ssh/config

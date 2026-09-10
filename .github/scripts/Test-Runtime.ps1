@@ -29,7 +29,7 @@ function Assert-Match {
     Write-Host "  ok: $What"
 }
 
-Remove-Item -Recurse -Force config.ps1, .ssh -ErrorAction SilentlyContinue
+Remove-Item -Force config.ps1, .ssh/id_rsa, .ssh/id_rsa.pub -ErrorAction SilentlyContinue
 
 Write-Host 'help nas duas linguas'
 Assert-Match (Invoke-Fishell @('help')) 'PAINEL' 'help pt'
@@ -43,7 +43,7 @@ Assert-Match $out 'siga os passos' 'roteiro'
 Assert-Match $out 'ssh-keygen -t rsa' 'instrucao do ssh-keygen'
 Assert-Match $out 'primeirospassos' 'link do cadastro'
 if (Test-Path '.ssh/id_rsa') { throw 'nao deveria ter gerado chave' }
-Remove-Item -Recurse -Force .ssh, config.ps1 -ErrorAction SilentlyContinue
+Remove-Item -Force .ssh/id_rsa, .ssh/id_rsa.pub, config.ps1 -ErrorAction SilentlyContinue
 
 Write-Host 'com chave no ~/.ssh: manda copiar, e cria a pasta de chaves'
 $homeKey = Join-Path $HOME '.ssh/id_rsa'
@@ -52,7 +52,7 @@ New-Item -ItemType Directory -Path (Join-Path $HOME '.ssh') -Force | Out-Null
 & ssh-keygen -t rsa -b 2048 -N '' -f $homeKey | Out-Null
 $out = Invoke-Fishell
 Assert-Match $out 'copie para c' 'sugere copiar'
-Remove-Item -Recurse -Force .ssh, config.ps1 -ErrorAction SilentlyContinue
+Remove-Item -Force .ssh/id_rsa, .ssh/id_rsa.pub, config.ps1 -ErrorAction SilentlyContinue
 Remove-Item -Force $homeKey, "$homeKey.pub" -ErrorAction SilentlyContinue
 
 Write-Host 'com chave existente: mostra a publica'
@@ -60,7 +60,7 @@ New-Item -ItemType Directory -Path .ssh -Force | Out-Null
 & ssh-keygen -t rsa -b 2048 -N '' -f .ssh/id_rsa | Out-Null
 $out = Invoke-Fishell
 Assert-Match $out 'ssh-rsa ' 'mostra a publica'
-Remove-Item -Recurse -Force .ssh, config.ps1 -ErrorAction SilentlyContinue
+Remove-Item -Force .ssh/id_rsa, .ssh/id_rsa.pub, config.ps1 -ErrorAction SilentlyContinue
 
 Write-Host 'setup'
 New-Item -ItemType Directory -Path .ssh -Force | Out-Null
@@ -86,5 +86,5 @@ Write-Host "  ok: 1 bloco no ~/.ssh/config"
 Write-Host 'status'
 Assert-Match (Invoke-Fishell @('status')) 'fishell v' 'status'
 
-Remove-Item -Recurse -Force config.ps1, .ssh -ErrorAction SilentlyContinue
+Remove-Item -Force config.ps1, .ssh/id_rsa, .ssh/id_rsa.pub -ErrorAction SilentlyContinue
 Write-Host 'runtime do ps1: ok'
