@@ -101,6 +101,9 @@ jobs:
           test -s ~/.ssh/id_rsa            # a chave nao foi truncada por copia sobre si
           rm -f st.txt config.sh ~/.ssh/id_rsa ~/.ssh/id_rsa.pub ~/.ssh/config
 
+      - name: leitura de teclas do menu (setas, enter)
+        run: bash .github/scripts/test_menu_keys.sh
+
       - name: validador da chave pública
         run: bash .github/scripts/test_validate_pubkey.sh
 

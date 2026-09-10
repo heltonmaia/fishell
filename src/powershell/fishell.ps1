@@ -85,7 +85,8 @@ function Set-Lang {
             M7_T='system readout';       M7_H='( status )'
             ML_T='language'
             M0_T='logout';               M0_H='( exit )'
-            PROMPT='select option'; PAUSE='press ENTER to return to control panel... '
+            PROMPT='select option'
+            PROMPT_KEYS='arrows + enter, or the key'; PAUSE='press ENTER to return to control panel... '
             INVALID='invalid opcode:'; BYE='session terminated.'; BYE2='goodbye.'
             LANGSET='language:'
             CFG_NOTFOUND='configuration file not found:'
@@ -149,7 +150,8 @@ function Set-Lang {
             M7_T='ver configuração';    M7_H='( status )'
             ML_T='idioma'
             M0_T='sair';                M0_H='( exit )'
-            PROMPT='escolha uma opção'; PAUSE='tecle ENTER para voltar ao painel... '
+            PROMPT='escolha uma opção'
+            PROMPT_KEYS='setas + enter, ou a tecla'; PAUSE='tecle ENTER para voltar ao painel... '
             INVALID='opção inválida:'; BYE='sessão encerrada.'; BYE2='até mais.'
             LANGSET='idioma:'
             CFG_NOTFOUND='arquivo de configuração não encontrado:'
@@ -681,15 +683,21 @@ function Menu-Header {
 }
 
 # Linha do painel: "  [X]  <title:20> <hint:16>      " = 50 chars entre ║ e ║.
+# A linha selecionada troca os 2 espaços da esquerda por "> ", em vez de
+# acrescentar caracteres: as 50 colunas continuam valendo, e o destaque
+# aparece mesmo com NO_COLOR.
 function Panel-Row {
-    param([string]$KeyColor, [string]$Key, [string]$Title, [string]$Hint)
+    param([string]$KeyColor, [string]$Key, [string]$Title, [string]$Hint,
+          [switch]$Selected)
     $titlePad = $Title.PadRight(20)
     $hintPad  = $Hint.PadRight(16)
-    Write-Line ("${G}║${R}  ${KeyColor}${Key}${R}  ${GB}${titlePad}${R} ${CYA}${hintPad}${R}      ${G}║${R}")
+    $mark = if ($Selected) { "${GB}${B}> ${R}" } else { '  ' }
+    $tc   = if ($Selected) { "${GB}${B}" } else { $GB }
+    Write-Line ("${G}║${R}${mark}${KeyColor}${Key}${R}  ${tc}${titlePad}${R} ${CYA}${hintPad}${R}      ${G}║${R}")
 }
 
 function Draw-Panel {
-    param([string]$Flash = '')
+    param([string]$Flash = '', [int]$Sel = 1)
     if (-not [Console]::IsOutputRedirected) { Write-Raw "${E}[H" }
     Print-Logo
     Menu-Header
@@ -699,31 +707,36 @@ function Draw-Panel {
     $fill = ' ' * (43 - $L.PANEL.Length)
     Write-Line ("${G}║${R}   ${CYA}░${R} ${GB}${B}$($L.PANEL)${R} ${CYA}░${R}${fill}${G}║${R}")
     Write-Line "${G}╠══════════════════════════════════════════════════╣${R}"
-    Panel-Row $YEL '[1]' $L.M1_T $L.M1_H
-    Panel-Row $YEL '[2]' $L.M2_T $L.M2_H
-    Panel-Row $YEL '[3]' $L.M3_T $L.M3_H
-    Panel-Row $YEL '[4]' $L.M4_T $L.M4_H
-    Panel-Row $YEL '[5]' $L.M5_T $L.M5_H
-    Panel-Row $YEL '[6]' $L.M6_T $L.M6_H
-    Panel-Row $YEL '[7]' $L.M7_T $L.M7_H
-    Panel-Row $CYA '[l]' $L.ML_T "( $($script:FISHELL_LANG) )"
-    Panel-Row $RED '[0]' $L.M0_T $L.M0_H
+    Panel-Row $YEL '[1]' $L.M1_T $L.M1_H -Selected:($Sel -eq 1)
+    Panel-Row $YEL '[2]' $L.M2_T $L.M2_H -Selected:($Sel -eq 2)
+    Panel-Row $YEL '[3]' $L.M3_T $L.M3_H -Selected:($Sel -eq 3)
+    Panel-Row $YEL '[4]' $L.M4_T $L.M4_H -Selected:($Sel -eq 4)
+    Panel-Row $YEL '[5]' $L.M5_T $L.M5_H -Selected:($Sel -eq 5)
+    Panel-Row $YEL '[6]' $L.M6_T $L.M6_H -Selected:($Sel -eq 6)
+    Panel-Row $YEL '[7]' $L.M7_T $L.M7_H -Selected:($Sel -eq 7)
+    Panel-Row $CYA '[l]' $L.ML_T "( $($script:FISHELL_LANG) )" -Selected:($Sel -eq 8)
+    Panel-Row $RED '[0]' $L.M0_T $L.M0_H -Selected:($Sel -eq 9)
     Write-Line "${G}╚══════════════════════════════════════════════════╝${R}"
     # Prompt pede a opção em vez de imitar um shell: um "fishell@npad:~#"
     # dá a impressão de que dá pra digitar comando ali.
-    Write-Raw "`n  ${G}>${R} ${GB}$($L.PROMPT)${R} ${GD}[1-7, l, 0]${R} : "
+    Write-Raw "`n  ${G}>${R} ${GB}$($L.PROMPT)${R} ${GD}($($L.PROMPT_KEYS))${R} : "
 }
 
-# Lê 1 tecla (sem ENTER). Sem TTY, lê uma linha e devolve '0' no EOF, para
-# pipe/CI não entrarem em loop.
+# Lê 1 tecla e devolve: up, down, enter, quit ou o caractere.
+# Sem TTY, lê uma linha e devolve '0' no EOF, para pipe/CI não entrarem em loop.
 function Read-MenuKey {
     if ([Console]::IsInputRedirected -or [Console]::IsOutputRedirected) {
         $s = [Console]::In.ReadLine()
         if ($null -eq $s) { return '0' }
         return $s.Trim()
     }
-    $k = [Console]::ReadKey($false)
-    if ($k.Key -eq 'Enter') { Write-Line ''; return '' }
+    $k = [Console]::ReadKey($true)
+    switch ($k.Key) {
+        'UpArrow'   { return 'up' }
+        'DownArrow' { return 'down' }
+        'Enter'     { Write-Line ''; return 'enter' }
+    }
+    Write-Line "$($k.KeyChar)"
     return "$($k.KeyChar)"
 }
 
@@ -737,11 +750,20 @@ function Redraw {
 
 function Menu-Loop {
     $flash = ''
+    $sel = 1
+    # indice da linha destacada -> tecla equivalente
+    $opts = @('1','2','3','4','5','6','7','l','0')
     while ($true) {
         if (-not [Console]::IsOutputRedirected) { Clear-Host }
-        Draw-Panel -Flash $flash
+        Draw-Panel -Flash $flash -Sel $sel
         $flash = ''
         $opt = Read-MenuKey
+        switch ($opt) {
+            'up'    { if ($sel -gt 1) { $sel-- } else { $sel = $opts.Count }; continue }
+            'down'  { if ($sel -lt $opts.Count) { $sel++ } else { $sel = 1 }; continue }
+            'enter' { $opt = $opts[$sel - 1] }
+            'quit'  { $opt = '0' }
+        }
         Redraw
         switch -Regex ($opt) {
             '^1$'                  { Action-Login }

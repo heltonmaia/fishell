@@ -91,6 +91,7 @@ set_lang() {
         L_ML_T="language"
         L_M0_T="logout";               L_M0_H="( exit )"
         L_PROMPT="select option"
+        L_PROMPT_KEYS="arrows + enter, or the key"
         L_PAUSE="press %bENTER%b to return to control panel... "
         L_INVALID="invalid opcode:"; L_BYE="session terminated."; L_BYE2="goodbye."
         L_LANGSET="language:"
@@ -158,6 +159,7 @@ set_lang() {
         L_ML_T="idioma"
         L_M0_T="sair";                L_M0_H="( exit )"
         L_PROMPT="escolha uma opção"
+        L_PROMPT_KEYS="setas + enter, ou a tecla"
         L_PAUSE="tecle %bENTER%b para voltar ao painel... "
         L_INVALID="opção inválida:"; L_BYE="sessão encerrada."; L_BYE2="até mais."
         L_LANGSET="idioma:"
@@ -279,8 +281,8 @@ print_logo() {
     print_info_line
 }
 
-# Lê uma tecla do menu (sem ENTER). Sem TTY, cai num read de linha e devolve
-# '0' no EOF, para pipe/CI não entrarem em loop.
+# Lê uma tecla do menu e devolve: up, down, enter, quit ou o caractere.
+# Sem TTY, lê uma linha e devolve '0' no EOF, para pipe/CI não entrarem em loop.
 menu_prompt_read() {
     local _var="$1"
     if [[ ! -t 0 || ! -t 1 ]]; then
@@ -288,19 +290,24 @@ menu_prompt_read() {
         read -r "$_var" || printf -v "$_var" '0'
         return
     fi
-    local key=""
-    if IFS= read -rsn1 key; then
-        if [[ -z "$key" ]]; then
-            printf -v "$_var" ''
-            echo
-        else
-            printf -v "$_var" '%s' "$key"
-            printf '%s\n' "$key"
-        fi
+    local key="" rest=""
+    if ! IFS= read -rsn1 key; then
+        printf -v "$_var" 'quit'
+    elif [[ "$key" == $'\e' ]]; then
+        # Seta chega como ESC [ A/B. O timeout separa isso de um ESC solto.
+        IFS= read -rsn2 -t 0.05 rest
+        case "$rest" in
+            '[A') printf -v "$_var" 'up' ;;
+            '[B') printf -v "$_var" 'down' ;;
+            *)    printf -v "$_var" '' ;;
+        esac
+    elif [[ -z "$key" ]]; then
+        printf -v "$_var" 'enter'
     else
-        printf -v "$_var" '0'
+        printf -v "$_var" '%s' "$key"
+        printf '%s\n' "$key"
     fi
-    # read -rsn1 deixa o tty em modo não-canônico; sem isto o output de
+    # read -rsn deixa o tty em modo não-canônico; sem isto o output de
     # subprocesso sai com o primeiro caractere de algumas linhas corrompido.
     stty sane 2>/dev/null || true
 }
@@ -741,7 +748,9 @@ redraw() {
 }
 
 menu() {
-    local flash=""
+    local flash="" sel=1
+    # indice da linha destacada -> tecla equivalente
+    local opts=(1 2 3 4 5 6 7 l 0)
     while true; do
         redraw
         menu_header
@@ -751,15 +760,20 @@ menu() {
         fi
         # Linha do painel: 50 chars entre as barras. Layout:
         #   "  [X]  <title:20> <hint:16>      " = 2+3+2+20+1+16+6 = 50
+        # A linha selecionada troca os 2 espaços da esquerda por "> ", em vez
+        # de acrescentar caracteres: as 50 colunas continuam valendo, e o
+        # destaque aparece mesmo com NO_COLOR.
         _row() {
-            local kc="$1" k="$2" title="$3" hint="$4"
-            printf '%b║%b  %b%s%b  %b%s%b %b%s%b      %b║%b\n' \
-                "$G" "$C_RESET" \
+            local kc="$1" k="$2" title="$3" hint="$4" mark="  " tc="$G_BRIGHT"
+            if [[ "$5" == "sel" ]]; then mark="$(printf '%b> %b' "$G_BRIGHT$C_BOLD" "$C_RESET")"; tc="$G_BRIGHT$C_BOLD"; fi
+            printf '%b║%b%s%b%s%b  %b%s%b %b%s%b      %b║%b\n' \
+                "$G" "$C_RESET" "$mark" \
                 "$kc" "$k" "$C_RESET" \
-                "$G_BRIGHT" "$(pad 20 "$title")" "$C_RESET" \
+                "$tc" "$(pad 20 "$title")" "$C_RESET" \
                 "$CYA" "$(pad 16 "$hint")" "$C_RESET" \
                 "$G" "$C_RESET"
         }
+        _sel() { [[ "$sel" == "$1" ]] && printf 'sel'; }
         printf '%b╔══════════════════════════════════════════════════╗%b\n' "$G" "$C_RESET"
         # Header: "   ░ CONTROL PANEL ░                              " = 3+1+1+13+1+1+30 = 50
         # 3 espaços + ░ + espaço + título + espaço + ░ + preenchimento = 50
@@ -772,22 +786,29 @@ menu() {
             "$_fill" "" \
             "$G" "$C_RESET"
         printf '%b╠══════════════════════════════════════════════════╣%b\n' "$G" "$C_RESET"
-        _row "$YEL" "[1]" "$L_M1_T" "$L_M1_H"
-        _row "$YEL" "[2]" "$L_M2_T" "$L_M2_H"
-        _row "$YEL" "[3]" "$L_M3_T" "$L_M3_H"
-        _row "$YEL" "[4]" "$L_M4_T" "$L_M4_H"
-        _row "$YEL" "[5]" "$L_M5_T" "$L_M5_H"
-        _row "$YEL" "[6]" "$L_M6_T" "$L_M6_H"
-        _row "$YEL" "[7]" "$L_M7_T" "$L_M7_H"
-        _row "$CYA" "[l]" "$L_ML_T" "( $FISHELL_LANG )"
-        _row "$RED" "[0]" "$L_M0_T" "$L_M0_H"
+        _row "$YEL" "[1]" "$L_M1_T" "$L_M1_H"            "$(_sel 1)"
+        _row "$YEL" "[2]" "$L_M2_T" "$L_M2_H"            "$(_sel 2)"
+        _row "$YEL" "[3]" "$L_M3_T" "$L_M3_H"            "$(_sel 3)"
+        _row "$YEL" "[4]" "$L_M4_T" "$L_M4_H"            "$(_sel 4)"
+        _row "$YEL" "[5]" "$L_M5_T" "$L_M5_H"            "$(_sel 5)"
+        _row "$YEL" "[6]" "$L_M6_T" "$L_M6_H"            "$(_sel 6)"
+        _row "$YEL" "[7]" "$L_M7_T" "$L_M7_H"            "$(_sel 7)"
+        _row "$CYA" "[l]" "$L_ML_T" "( $FISHELL_LANG )"  "$(_sel 8)"
+        _row "$RED" "[0]" "$L_M0_T" "$L_M0_H"            "$(_sel 9)"
         printf '%b╚══════════════════════════════════════════════════╝%b\n' "$G" "$C_RESET"
         local opt
         # Prompt pede a opção em vez de imitar um shell: um "fishell@npad:~#"
         # dá a impressão de que dá pra digitar comando ali.
-        printf '\n  %b>%b %b%s%b %b[1-7, l, 0]%b : ' \
-            "$G" "$C_RESET" "$G_BRIGHT" "$L_PROMPT" "$C_RESET" "$G_DIM" "$C_RESET"
+        printf '\n  %b>%b %b%s%b %b(%s)%b : ' \
+            "$G" "$C_RESET" "$G_BRIGHT" "$L_PROMPT" "$C_RESET" \
+            "$G_DIM" "$L_PROMPT_KEYS" "$C_RESET"
         menu_prompt_read opt
+        case "$opt" in
+            up)   sel=$(( sel > 1 ? sel - 1 : ${#opts[@]} )); continue ;;
+            down) sel=$(( sel < ${#opts[@]} ? sel + 1 : 1 ));  continue ;;
+            enter) opt="${opts[$((sel-1))]}" ;;
+            quit)  opt=0 ;;
+        esac
         redraw
         case "$opt" in
             1|01) action_login ;;
