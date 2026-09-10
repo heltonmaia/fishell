@@ -12,11 +12,33 @@ Comece pela **parte 1**: o acesso na mão, sem ferramenta nenhuma.
 
 ---
 
+## Como funciona
+
+```mermaid
+flowchart LR
+    A["<b>Sua máquina</b><br/>código · dados"]
+
+    subgraph NPAD["NPAD — sc2.npad.ufrn.br:4422"]
+        direction TB
+        B["<b>nó de login</b><br/>editar · compilar · testar"]
+        C["<b>nós de computação</b><br/>o treino roda aqui"]
+        B -->|"<b>sbatch</b>"| C
+    end
+
+    A -->|"<b>ssh</b> — terminal remoto"| B
+    A <-->|"<b>scp</b> — arquivos"| B
+```
+
+**`ssh`** te dá um terminal lá dentro; **`scp`** move arquivos. Você conecta no
+*nó de login* — o trabalho pesado vai para os *nós de computação*, via
+`sbatch`.
+
+---
+
 ## 1. Acesso ao NPAD
 
-Antes do fishell, faça o acesso **na mão**. São três comandos, e é o que
-estabelece a base: se isto funciona, o resto é conveniência; se não funciona,
-nenhuma ferramenta conserta.
+Faça isso **na mão** primeiro. Se funcionar, o resto é conveniência; se não
+funcionar, nenhuma ferramenta conserta.
 
 ### Gere sua chave
 
@@ -30,10 +52,8 @@ ssh-keygen -t rsa
 Isso cria `~/.ssh/id_rsa` (privada, nunca sai daí) e `~/.ssh/id_rsa.pub`
 (pública, é a que você cadastra).
 
-> A pública termina com um comentário, tipo `helton@notebook`. É texto livre —
-> o `ssh-keygen` preenche com `usuário@máquina` de onde você gerou. Ele não
-> tem efeito nenhum na autenticação; serve para você reconhecer a chave na sua
-> lista do NPAD. Se for cadastrar mais de uma, vale escolher um nome claro:
+> O texto no fim da pública (`helton@notebook`) é só um rótulo, para você
+> reconhecer a chave na lista do NPAD. Vai cadastrar mais de uma?
 > `ssh-keygen -t rsa -C "colab"`.
 
 ### Cadastre a pública
@@ -64,39 +84,30 @@ scp -P4422 dados.zip SEU_LOGIN@sc2.npad.ufrn.br:~/
 scp -P4422 SEU_LOGIN@sc2.npad.ufrn.br:~/resultado.h5 .
 ```
 
-> **No Google Colab tem um porém.** O `~/.ssh` fica na VM, que é descartada a
-> cada reinício — a chave se perde junto. Gere dentro do seu Drive e aponte
-> para ela na conexão:
+> **No Colab**, o `~/.ssh` some quando a VM reinicia. Gere no Drive e aponte:
 >
 > ```bash
 > ssh-keygen -t rsa -f /content/drive/MyDrive/SuaPasta/.ssh/id_rsa
 > ssh -i /content/drive/MyDrive/SuaPasta/.ssh/id_rsa -p4422 SEU_LOGIN@sc2.npad.ufrn.br
 > ```
 >
-> Funciona, mas você repete o `-i` e o `-p` em todo comando. É exatamente esse
-> incômodo que a próxima seção resolve.
+> Repetir `-i` e `-p` em todo comando cansa — é o que a parte 3 resolve.
 
 ---
 
 ## 2. Por que o fishell
 
-Com o acesso funcionando, o que sobra é repetição:
+Com o acesso funcionando, o que sobra é repetição: a porta em todo comando, o
+caminho longo em todo `scp`, e — no Colab — reinstalar a chave a cada reinício
+da VM.
 
-- `-p4422` no `ssh` e `-P4422` no `scp`, sempre;
-- no Colab, refazer a instalação da chave a cada reinício da VM;
-- `scp` com caminho longo dos dois lados toda vez que troca um arquivo.
+A [documentação do NPAD](https://github.com/NPAD-UFRN/Tutorials) já resolve a
+primeira, ensinando a criar um alias no `~/.ssh/config`. O fishell escreve esse
+bloco para você, guarda as chaves onde o Colab não apaga, e junta tudo num
+painel.
 
-A saída para a primeira é o **alias** — e a própria
-[documentação do NPAD](https://github.com/NPAD-UFRN/Tutorials) ensina isso:
-um bloco no `~/.ssh/config` com host, porta e usuário, para você digitar só
-`ssh super-pc`.
-
-O fishell escreve esse bloco para você (com o nome `npad`, configurável),
-guarda suas chaves numa pasta que sobrevive ao Colab, e junta conectar, enviar,
-baixar e rodar comando num painel.
-
-Ele não substitui o que você fez acima — usa exatamente o mesmo `ssh` e o mesmo
-`scp`, e depois do `setup` o `ssh npad` funciona mesmo sem ele.
+Ele usa o mesmo `ssh` e o mesmo `scp` — depois do `setup`, `ssh npad` funciona
+até sem ele.
 
 ---
 
@@ -134,23 +145,13 @@ Copy-Item config\config.ps1.example config.ps1
 
 ### Aponte para suas chaves
 
-Copie o par que você já usou na parte 1 para a pasta `.ssh/` do fishell:
+Aponte o `config.sh` para onde suas chaves já estão — melhor que copiar, que
+deixaria a mesma chave privada em dois lugares:
 
 ```bash
-mkdir -p .ssh
-cp ~/.ssh/id_rsa ~/.ssh/id_rsa.pub .ssh/
+SSH_KEYS_DIR="$HOME/.ssh"                              # o caso comum
+SSH_KEYS_DIR="/content/drive/MyDrive/SuaPasta/.ssh"    # se gerou no Drive
 ```
-
-**Se você seguiu o caminho do Colab na parte 1**, sua chave já está no Drive e
-o `cp` acima não vai achar nada — o certo ali é não copiar, e sim apontar, no
-`config.sh`:
-
-```bash
-SSH_KEYS_DIR="/content/drive/MyDrive/SuaPasta/.ssh"
-```
-
-Vale para qualquer máquina, aliás: apontar em vez de copiar evita ter a mesma
-chave privada em dois lugares.
 
 ### Preencha seu login e rode
 
@@ -227,8 +228,6 @@ Para mudar o idioma de forma permanente, edite `FISHELL_LANG` no `config.sh`.
 ## 6. Usando o NPAD
 
 ### Onde o seu programa roda
-
-Esta é a distinção que mais derruba quem está começando:
 
 | | **nó de login** | **nós de computação** |
 | --- | --- | --- |
@@ -328,27 +327,23 @@ Dá para consultar sem abrir shell nenhum:
 
 ### `known_hosts` ausente
 
-O `status` mostra `✗ known_hosts`? A conexão até funciona, mas o `test` falha:
-ele usa `BatchMode` e não pode confirmar a identidade do servidor
-interativamente. Gere o arquivo e **confira** o que veio:
+O `status` mostra `✗ known_hosts`? O `test` usa `BatchMode` e não consegue
+confirmar a identidade do servidor sozinho. Gere e **confira**:
 
 ```bash
 ssh-keyscan -p4422 sc2.npad.ufrn.br > .ssh/known_hosts 2>/dev/null
 ssh-keygen -lf .ssh/known_hosts
 ```
 
-As fingerprints do NPAD devem ser estas:
-
-| tipo | fingerprint |
+| tipo | fingerprint esperada |
 | --- | --- |
 | ED25519 | `SHA256:Lfjr9sC3MnZJj/27hWtDsQF5wJ6rTU0j62T3qFxpUgM` |
 | RSA | `SHA256:mUQ9ZrO4/2PYJHKx2Jh/OwN8LbPzPkfbiqzNv84be1E` |
 | ECDSA | `SHA256:PAAyt3VUyhhmNyZBVuWQB3b4w5XRh8gDTiaD+2Q3ef8` |
 
-Conferir não é burocracia: o `ssh-keyscan` aceita qualquer chave que o servidor
-apresentar, sem validar nada. É a comparação com uma fonte conhecida que
-transforma isso em verificação. Se **não** baterem, não prossiga — pergunte ao
-`atendimento@npad.ufrn.br` antes.
+O `ssh-keyscan` aceita qualquer chave que o servidor apresentar — é a
+comparação com a tabela que vira verificação. Não bateu? Não prossiga; fale com
+`atendimento@npad.ufrn.br`.
 
 ---
 
