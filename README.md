@@ -48,6 +48,9 @@ O NPAD só aceita login por chave, não existe senha. E a chave precisa ser
 ssh-keygen -t rsa
 ```
 
+Se aparecer `already exists. Overwrite (y/n)?`, responda **n**: você já tem uma
+chave e ela serve. Sobrescrever invalidaria os cadastros feitos com a antiga.
+
 Isso cria `~/.ssh/id_rsa` (privada, nunca sai daí) e `~/.ssh/id_rsa.pub`
 (pública, é a que você cadastra).
 
