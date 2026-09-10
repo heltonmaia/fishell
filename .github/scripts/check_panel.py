@@ -5,7 +5,7 @@ A caixa do CONTROL PANEL é montada com padding contado à mão nos dois ports
 (printf '%-20s'/'%-16s' no bash, .PadRight() no ps1). Um título ou hint mais
 longo que o pad desalinha a caixa inteira sem quebrar nada mais — daí o check.
 
-Uso: FISHELL_NOANIM=1 NO_COLOR=1 ./fishell.sh </dev/null | check_panel.py
+Uso: NO_COLOR=1 ./bin/fishell.sh </dev/null | python3 check_panel.py
 """
 import sys
 

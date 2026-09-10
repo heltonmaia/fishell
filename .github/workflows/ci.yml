@@ -19,8 +19,8 @@ jobs:
       - name: help roda sem config.sh (pt e en)
         run: |
           test ! -f config.sh
-          FISHELL_NOANIM=1 NO_COLOR=1 ./bin/fishell.sh help | grep -q 'PAINEL'
-          FISHELL_LANG=en FISHELL_NOANIM=1 NO_COLOR=1 ./bin/fishell.sh help \
+          NO_COLOR=1 ./bin/fishell.sh help | grep -q 'PAINEL'
+          FISHELL_LANG=en NO_COLOR=1 ./bin/fishell.sh help \
             | grep -q 'CONTROL PANEL'
 
       # A 1a execucao sem config nao pode mandar "preencha NPAD_USER": nesse
@@ -28,11 +28,11 @@ jobs:
       - name: primeira execução gera a chave e mostra o roteiro
         run: |
           test ! -f config.sh
-          FISHELL_NOANIM=1 NO_COLOR=1 bash bin/fishell.sh > ob.txt 2>&1 || true
+          NO_COLOR=1 bash bin/fishell.sh > ob.txt 2>&1 || true
           grep -q 'faltam três passos' ob.txt
           grep -q 'npad.ufrn.br/npad/primeirospassos' ob.txt
           test -f .ssh/id_rsa.pub                    # gerou a chave na hora
-          grep -q ' fishell$' .ssh/id_rsa.pub        # comentário sem "@"
+          grep -qE ' fishell@[^ ]+$' .ssh/id_rsa.pub  # comentário identifica a máquina
           grep -q 'ssh-rsa ' ob.txt                  # e imprimiu a pública
           rm -rf .ssh ob.txt config.sh
 
@@ -41,10 +41,10 @@ jobs:
       - name: keygen funciona em clone novo, sem conta configurada
         run: |
           test ! -f config.sh
-          FISHELL_NOANIM=1 NO_COLOR=1 bash bin/fishell.sh keygen | tee kg.txt
+          NO_COLOR=1 bash bin/fishell.sh keygen | tee kg.txt
           test -f .ssh/id_rsa && test -f .ssh/id_rsa.pub
           grep -q 'npad.ufrn.br' kg.txt
-          grep -q ' fishell$' .ssh/id_rsa.pub     # comentario sem "@fishell"
+          grep -qE ' fishell@[^ ]+$' .ssh/id_rsa.pub  # comentário identifica a máquina
           rm -rf .ssh kg.txt config.sh
 
       - name: shellcheck (bloqueia em erros)
@@ -61,8 +61,7 @@ jobs:
       # menu falharia e o painel nunca chegaria a ser desenhado.
       - name: setup completo com chave descartável
         env:
-          FISHELL_NOANIM: '1'
-          NO_COLOR: '1'
+                    NO_COLOR: '1'
         run: |
           cp config/config.sh.example config.sh
           sed -i 's/seu_usuario_aqui/ci_user/' config.sh
@@ -74,8 +73,7 @@ jobs:
       # deixavam de casar e cada setup acrescentava um bloco novo.
       - name: setup repetido reescreve o bloco em vez de duplicar
         env:
-          FISHELL_NOANIM: '1'
-          NO_COLOR: '1'
+                    NO_COLOR: '1'
         run: |
           ./bin/fishell.sh setup >/dev/null
           ./bin/fishell.sh setup >/dev/null
@@ -91,14 +89,14 @@ jobs:
       - name: funciona sem bit de execução (Drive/FUSE)
         run: |
           chmod 644 bin/fishell.sh src/bash/fishell.sh
-          FISHELL_NOANIM=1 NO_COLOR=1 bash bin/fishell.sh status | grep -q 'fishell v'
+          NO_COLOR=1 bash bin/fishell.sh status | grep -q 'fishell v'
           chmod 755 bin/fishell.sh src/bash/fishell.sh
 
       - name: painel mantém as 50 colunas em pt e en
         run: |
           for lang in pt en; do
             echo "── $lang ──"
-            FISHELL_LANG=$lang FISHELL_NOANIM=1 NO_COLOR=1 \
+            FISHELL_LANG=$lang NO_COLOR=1 \
               timeout 30 ./bin/fishell.sh </dev/null >panel-$lang.txt
             python3 .github/scripts/check_panel.py <panel-$lang.txt
           done

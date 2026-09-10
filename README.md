@@ -206,7 +206,6 @@ ENTER.
 | `7`   | mostra a configuração atual (usuário, host, porta, chaves)    |
 | `8`   | gera um par de chaves novo                                    |
 | `l`   | troca o idioma da interface (pt ⇄ en)                         |
-| `a`   | liga/desliga a animação do banner                             |
 | `0` ou `q` | sai                                                      |
 
 ### Idioma
@@ -456,7 +455,7 @@ número de versão.
 bash -n src/bash/fishell.sh bin/fishell.sh          # sintaxe
 shellcheck src/bash/fishell.sh bin/fishell.sh       # se disponível
 
-FISHELL_LANG=pt FISHELL_NOANIM=1 NO_COLOR=1 ./bin/fishell.sh </dev/null \
+FISHELL_LANG=pt NO_COLOR=1 ./bin/fishell.sh </dev/null \
   | python3 .github/scripts/check_panel.py          # a caixa tem 50 colunas
 
 python3 tools/make-screenshot.py                    # regenera o print do README

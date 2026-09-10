@@ -9,7 +9,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # O codigo vive em src/bash/, mas config.sh e .ssh/ sao do usuario e ficam na
 # raiz do repo — dois niveis acima.
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-FISHELL_VERSION="2.4"
+FISHELL_VERSION="2.5"
 
 # Idioma escolhido pelo ambiente vence o do config.sh; guardado antes de
 # sourcear a config justamente pra poder reaplicar depois.
@@ -79,8 +79,6 @@ set_lang() {
       en)
         FISHELL_LANG=en
         L_TAGLINE="npad/ufrn secure access terminal"; L_TARGET="target"
-        L_BOOT1="loading fishell runtime..."; L_BOOT2="scanning local environment..."
-        L_BOOT3="checking credentials path...";  L_BOOT4="ready."
         L_HDR_TYPE="type"; L_HDR_OR="or"; L_HDR_EXIT="to exit"
         L_PANEL="CONTROL PANEL"
         L_M1_T="open secure shell";    L_M1_H="( ssh npad )"
@@ -91,12 +89,12 @@ set_lang() {
         L_M6_T="redeploy ssh payload"; L_M6_H="( re-setup )"
         L_M7_T="system readout";       L_M7_H="( status )"
         L_M8_T="generate keypair";     L_M8_H="( ssh-keygen )"
-        L_ML_T="language";             L_MA_T="toggle animation"
+        L_ML_T="language"
         L_M0_T="logout";               L_M0_H="( exit )"
         L_PROMPT="select option"
         L_PAUSE="press %bENTER%b to return to control panel... "
         L_INVALID="invalid opcode:"; L_BYE="session terminated."; L_BYE2="goodbye."
-        L_ANIM="animation:"; L_LANGSET="language:"; L_ON="on"; L_OFF="off"
+        L_LANGSET="language:"
         L_CFG_NOTFOUND="configuration file not found:"
         L_CFG_COPY="copying template from config/config.sh.example..."
         L_CFG_EDIT="edit %s and set NPAD_USER before running again."
@@ -140,8 +138,6 @@ set_lang() {
       *)
         FISHELL_LANG=pt
         L_TAGLINE="terminal de acesso ao npad/ufrn"; L_TARGET="alvo"
-        L_BOOT1="carregando o fishell..."; L_BOOT2="verificando o ambiente local..."
-        L_BOOT3="procurando as credenciais..."; L_BOOT4="pronto."
         L_HDR_TYPE="tecle"; L_HDR_OR="ou"; L_HDR_EXIT="para sair"
         L_PANEL="PAINEL DE CONTROLE"
         L_M1_T="abrir shell seguro";  L_M1_H="( ssh npad )"
@@ -152,12 +148,12 @@ set_lang() {
         L_M6_T="reinstalar chaves";   L_M6_H="( refazer )"
         L_M7_T="ver configuração";    L_M7_H="( status )"
         L_M8_T="gerar par de chaves"; L_M8_H="( ssh-keygen )"
-        L_ML_T="idioma";              L_MA_T="animação"
+        L_ML_T="idioma"
         L_M0_T="sair";                L_M0_H="( exit )"
         L_PROMPT="escolha uma opção"
         L_PAUSE="tecle %bENTER%b para voltar ao painel... "
         L_INVALID="opção inválida:"; L_BYE="sessão encerrada."; L_BYE2="até mais."
-        L_ANIM="animação:"; L_LANGSET="idioma:"; L_ON="on"; L_OFF="off"
+        L_LANGSET="idioma:"
         L_CFG_NOTFOUND="arquivo de configuração não encontrado:"
         L_CFG_COPY="copiando o modelo de config/config.sh.example..."
         L_CFG_EDIT="edite %s e defina NPAD_USER antes de rodar de novo."
@@ -201,22 +197,6 @@ set_lang() {
     esac
 }
 set_lang
-
-# Typewriter — efeito opcional; desativado se FISHELL_NOANIM=1
-typewrite() {
-    local text="$1" delay="${2:-0.008}"
-    if [[ "${FISHELL_NOANIM:-0}" == "1" || ! -t 1 ]]; then
-        printf '%s\n' "$text"
-        return
-    fi
-    local i ch
-    for (( i=0; i<${#text}; i++ )); do
-        ch="${text:i:1}"
-        printf '%s' "$ch"
-        sleep "$delay"
-    done
-    printf '\n'
-}
 
 # Linha de "scanline" decorativa (largura N)
 hline() {
@@ -277,76 +257,37 @@ print_info_line() {
     printf '%b  » %s: %s::  imd/ufrn%b\n\n' "$G_DIM" "$L_TARGET" "$(pad 28 "$NPAD_HOST:$NPAD_PORT")" "$C_RESET"
 }
 
-# Logo estático — usado em cada redraw do menu (não anima).
-# Varia o frame com base em $SECONDS pra dar leve variação entre redraws.
+# Banner estático. O frame é fixo de propósito: saída determinística ajuda o
+# check do painel no CI e o gerador do screenshot.
 print_logo() {
-    local frame=$(( SECONDS % 6 ))
-    draw_logo_scene "$frame"
+    draw_logo_scene 2
     print_info_line
 }
 
-# Lê uma tecla do menu mantendo o aquário animando no topo.
-# Com FISHELL_NOANIM=1 ou sem TTY, cai num read normal.
+# Lê uma tecla do menu (sem ENTER). Sem TTY, cai num read de linha e devolve
+# '0' no EOF, para pipe/CI não entrarem em loop.
 menu_prompt_read() {
     local _var="$1"
-    if [[ "${FISHELL_NOANIM:-0}" == "1" || ! -t 0 || ! -t 1 ]]; then
-        # EOF (stdin fechado/pipe): devolve '0' pra sair em vez de loopar.
+    if [[ ! -t 0 || ! -t 1 ]]; then
         # shellcheck disable=SC2229  # atribuição indireta é intencional aqui
         read -r "$_var" || printf -v "$_var" '0'
         return
     fi
-    printf '\0337'   # DECSC: salva posição do cursor (no prompt)
-    local t=0 key=""
-    while true; do
-        printf '\033[H'           # vai pro canto superior esquerdo
-        draw_logo_scene "$t"      # redesenha só as 6 linhas do banner
-        printf '\0338'            # DECRC: volta o cursor ao prompt
-        if IFS= read -rs -t 0.12 -N 1 key; then
-            if [[ "$key" == $'\n' || "$key" == $'\r' ]]; then
-                printf -v "$_var" ''
-                echo
-            else
-                printf -v "$_var" '%s' "$key"
-                printf '%s\n' "$key"
-            fi
-            # Garante que o tty saia em modo canônico (o read -rs -N normalmente
-            # restaura, mas em timeout forçado ou sinal pode sobrar state).
-            stty sane 2>/dev/null || true
-            return
+    local key=""
+    if IFS= read -rsn1 key; then
+        if [[ -z "$key" ]]; then
+            printf -v "$_var" ''
+            echo
+        else
+            printf -v "$_var" '%s' "$key"
+            printf '%s\n' "$key"
         fi
-        t=$((t+1))
-    done
-}
-
-# Animação de entrada: peixinho nada + bolhas sobem (~1.5s).
-animate_intro() {
-    if [[ "${FISHELL_NOANIM:-0}" == "1" || ! -t 1 ]]; then
-        print_logo
-        return
+    else
+        printf -v "$_var" '0'
     fi
-    clear 2>/dev/null || true
-    local t frames=16 delay=0.08
-    for (( t=0; t<frames; t++ )); do
-        tput cup 0 0 2>/dev/null || printf '\033[H'
-        draw_logo_scene "$t"
-        sleep "$delay"
-    done
-    print_info_line
-}
-
-print_banner() {
-    animate_intro
-}
-
-# Boot sequence curta (rodada 1x por sessão)
-boot_sequence() {
-    [[ "${FISHELL_NOANIM:-0}" == "1" || ! -t 1 ]] && return
-    printf '%b' "$G_DIM"
-    typewrite "  [boot] $L_BOOT1" 0.004
-    typewrite "  [boot] $L_BOOT2" 0.004
-    typewrite "  [boot] $L_BOOT3" 0.004
-    typewrite "  [boot] $L_BOOT4" 0.004
-    printf '%b\n' "$C_RESET"
+    # read -rsn1 deixa o tty em modo não-canônico; sem isto o output de
+    # subprocesso sai com o primeiro caractere de algumas linhas corrompido.
+    stty sane 2>/dev/null || true
 }
 
 # ─── Carrega configuração ─────────────────────────────────────
@@ -615,9 +556,15 @@ action_keygen() {
     mkdir -p "$SSH_KEYS_DIR"
     chmod 700 "$SSH_KEYS_DIR"
     stty sane 2>/dev/null || true
-    # Sem conta ainda, o comentario e' so "fishell" (nao "fishell@fishell").
-    local comment="fishell"
-    [[ "${NPAD_USER_SET:-1}" == "1" ]] && comment="${NPAD_USER}@fishell"
+    # O comentario da chave serve pra distinguir as chaves na lista do NPAD,
+    # entao identifica a MAQUINA de origem, nao o tool.
+    local host
+    if [[ -n "${COLAB_RELEASE_TAG:-}" || -d /content/drive ]]; then
+        host="colab"
+    else
+        host="$(hostname -s 2>/dev/null || echo local)"
+    fi
+    local comment="fishell@${host}"
     if ! ssh-keygen -t rsa -b 4096 -N '' -C "$comment" -f "$key" >/dev/null; then
         log_err "$L_KEYGEN_FAIL"
         return 1
@@ -677,11 +624,10 @@ ${G_BRIGHT}COMMANDS${C_RESET}
 ${G_BRIGHT}CONTROL PANEL${C_RESET}
   ${G}1${C_RESET} shell    ${G}2${C_RESET} test     ${G}3${C_RESET} upload   ${G}4${C_RESET} download
   ${G}5${C_RESET} run      ${G}6${C_RESET} setup    ${G}7${C_RESET} status   ${G}8${C_RESET} keygen
-  ${G}l${C_RESET} language         ${G}a${C_RESET} animation        ${G}0${C_RESET}/${G}q${C_RESET} exit
+  ${G}l${C_RESET} language                          ${G}0${C_RESET}/${G}q${C_RESET} exit
 
 ${G_BRIGHT}ENV${C_RESET}
   ${GRAY}FISHELL_LANG=pt|en${C_RESET}  interface language (default: pt)
-  ${GRAY}FISHELL_NOANIM=1${C_RESET}    disable typewriter/boot animation
   ${GRAY}NO_COLOR=1${C_RESET}          disable ansi colors
 
 ${G_BRIGHT}CONFIG${C_RESET}
@@ -709,11 +655,10 @@ ${G_BRIGHT}COMANDOS${C_RESET}
 ${G_BRIGHT}PAINEL${C_RESET}
   ${G}1${C_RESET} shell    ${G}2${C_RESET} testar   ${G}3${C_RESET} enviar   ${G}4${C_RESET} baixar
   ${G}5${C_RESET} comando  ${G}6${C_RESET} setup    ${G}7${C_RESET} config   ${G}8${C_RESET} chaves
-  ${G}l${C_RESET} idioma           ${G}a${C_RESET} animação         ${G}0${C_RESET}/${G}q${C_RESET} sair
+  ${G}l${C_RESET} idioma                            ${G}0${C_RESET}/${G}q${C_RESET} sair
 
 ${G_BRIGHT}AMBIENTE${C_RESET}
   ${GRAY}FISHELL_LANG=pt|en${C_RESET}  idioma da interface (padrão: pt)
-  ${GRAY}FISHELL_NOANIM=1${C_RESET}    desliga a animação
   ${GRAY}NO_COLOR=1${C_RESET}          desliga as cores
 
 ${G_BRIGHT}CONFIG${C_RESET}
@@ -738,11 +683,18 @@ menu_header() {
         "$G_BRIGHT" "$C_RESET" "$L_HDR_EXIT" "$C_RESET"
 }
 
+# Sem TTY (pipe, célula de notebook, CI) o `clear` só vazaria escape na saída,
+# e o banner já foi impresso uma vez pelo main — então nada de redesenhar.
+redraw() {
+    [[ -t 1 ]] || return 0
+    clear 2>/dev/null || true
+    print_logo
+}
+
 menu() {
     local flash=""
     while true; do
-        clear 2>/dev/null || true
-        print_logo
+        redraw
         menu_header
         if [[ -n "$flash" ]]; then
             printf '%s\n\n' "$flash"
@@ -779,20 +731,16 @@ menu() {
         _row "$YEL" "[6]" "$L_M6_T" "$L_M6_H"
         _row "$YEL" "[7]" "$L_M7_T" "$L_M7_H"
         _row "$YEL" "[8]" "$L_M8_T" "$L_M8_H"
-        local _anim
-        if [[ "${FISHELL_NOANIM:-0}" == "1" ]]; then _anim="$L_OFF"; else _anim="$L_ON"; fi
         _row "$CYA" "[l]" "$L_ML_T" "( $FISHELL_LANG )"
-        _row "$CYA" "[a]" "$L_MA_T" "( $_anim )"
         _row "$RED" "[0]" "$L_M0_T" "$L_M0_H"
         printf '%b╚══════════════════════════════════════════════════╝%b\n' "$G" "$C_RESET"
         local opt
         # Prompt pede a opção em vez de imitar um shell: um "fishell@npad:~#"
         # dá a impressão de que dá pra digitar comando ali.
-        printf '\n  %b>%b %b%s%b %b[1-8, l, a, 0]%b : ' \
+        printf '\n  %b>%b %b%s%b %b[1-8, l, 0]%b : ' \
             "$G" "$C_RESET" "$G_BRIGHT" "$L_PROMPT" "$C_RESET" "$G_DIM" "$C_RESET"
         menu_prompt_read opt
-        clear 2>/dev/null || true
-        print_logo
+        redraw
         case "$opt" in
             1|01) action_login ;;
             2|02) test_connection;  pause_return ;;
@@ -802,15 +750,6 @@ menu() {
             6|06) setup_ssh;        pause_return ;;
             7|07) show_status;      pause_return ;;
             8|08) action_keygen;     pause_return ;;
-            a|A)
-                if [[ "${FISHELL_NOANIM:-0}" == "1" ]]; then
-                    export FISHELL_NOANIM=0
-                    flash="$(printf '%b[*]%b %s %b%s%b' "$G" "$C_RESET" "$L_ANIM" "$G_BRIGHT" "$L_ON" "$C_RESET")"
-                else
-                    export FISHELL_NOANIM=1
-                    flash="$(printf '%b[*]%b %s %b%s%b' "$G" "$C_RESET" "$L_ANIM" "$G_DIM" "$L_OFF" "$C_RESET")"
-                fi
-                ;;
             l|L)
                 if [[ "$FISHELL_LANG" == "en" ]]; then FISHELL_LANG=pt; else FISHELL_LANG=en; fi
                 export FISHELL_LANG
@@ -829,13 +768,12 @@ menu() {
 main() {
     case "${1:-menu}" in
         help|-h|--help)
-            print_banner
+            print_logo
             show_help
             return 0 ;;
     esac
 
-    print_banner
-    boot_sequence
+    print_logo
     if [[ "${1:-menu}" == "keygen" ]]; then
         load_config lenient
     else

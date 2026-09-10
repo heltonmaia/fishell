@@ -50,16 +50,14 @@ def capture(lang="pt"):
         with open(cfg, "w", encoding="utf-8") as f:
             f.write(conf)
         # script(1) dá um pty ao filho — sem isso o fishell desliga as cores.
-        # FISHELL_NOANIM=1 é obrigatório: com animação o menu nunca vê o EOF.
+        # Manda "0" (sair) pelo pty: o menu lê uma tecla sem ENTER, então um
+        # stdin fechado o deixaria esperando para sempre.
         out = subprocess.run(
-            ["script", "-qec", f"FISHELL_LANG={lang} FISHELL_NOANIM=1 ./bin/fishell.sh", "/dev/null"],
-            cwd=work, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+            ["script", "-qec", f"FISHELL_LANG={lang} ./bin/fishell.sh", "/dev/null"],
+            cwd=work, input=b"0\n", stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT, timeout=60,
         ).stdout.decode("utf-8", "replace")
-    # O painel mostra "off" porque a captura precisou desligar a animação (com
-    # ela ligada o menu nunca vê o EOF); num run normal o usuário vê "on".
-    # O espaço extra mantém as 50 colunas da caixa, já que "on" é 1 char menor.
-    return out.replace("( off )", "( on ) ")
+    return out
 
 
 def parse(raw):

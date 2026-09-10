@@ -27,7 +27,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$FishellVersion = '2.4'
+$FishellVersion = '2.5'
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 # O codigo vive em src/powershell/, mas config.ps1 e .ssh/ sao do usuario e
 # ficam na raiz do repo — dois niveis acima.
@@ -74,10 +74,6 @@ function Set-Lang {
     if ($script:FISHELL_LANG -eq 'en') {
         $script:L = @{
             TAGLINE='npad/ufrn secure access terminal'; TARGET='target'
-            # BOOT* ficam aqui só para a tabela ser idêntica à do bash; o port
-            # PowerShell não tem boot sequence.
-            BOOT1='loading fishell runtime...'; BOOT2='scanning local environment...'
-            BOOT3='checking credentials path...';  BOOT4='ready.'
             HDR_TYPE='type'; HDR_OR='or'; HDR_EXIT='to exit'
             PANEL='CONTROL PANEL'
             M1_T='open secure shell';    M1_H='( ssh npad )'
@@ -88,11 +84,11 @@ function Set-Lang {
             M6_T='redeploy ssh payload'; M6_H='( re-setup )'
             M7_T='system readout';       M7_H='( status )'
             M8_T='generate keypair';     M8_H='( ssh-keygen )'
-            ML_T='language';             MA_T='toggle animation'
+            ML_T='language'
             M0_T='logout';               M0_H='( exit )'
             PROMPT='select option'; PAUSE='press ENTER to return to control panel... '
             INVALID='invalid opcode:'; BYE='session terminated.'; BYE2='goodbye.'
-            ANIM='animation:'; LANGSET='language:'; ON='on'; OFF='off'
+            LANGSET='language:'
             CFG_NOTFOUND='configuration file not found:'
             CFG_COPY='copying template from config/config.ps1.example...'
             CFG_EDIT='edit {0} and set $NPAD_USER before running again.'
@@ -135,8 +131,6 @@ function Set-Lang {
         $script:FISHELL_LANG = 'pt'
         $script:L = @{
             TAGLINE='terminal de acesso ao npad/ufrn'; TARGET='alvo'
-            BOOT1='carregando o fishell...'; BOOT2='verificando o ambiente local...'
-            BOOT3='procurando as credenciais...'; BOOT4='pronto.'
             HDR_TYPE='tecle'; HDR_OR='ou'; HDR_EXIT='para sair'
             PANEL='PAINEL DE CONTROLE'
             M1_T='abrir shell seguro';  M1_H='( ssh npad )'
@@ -147,11 +141,11 @@ function Set-Lang {
             M6_T='reinstalar chaves';   M6_H='( refazer )'
             M7_T='ver configuração';    M7_H='( status )'
             M8_T='gerar par de chaves'; M8_H='( ssh-keygen )'
-            ML_T='idioma';              MA_T='animação'
+            ML_T='idioma'
             M0_T='sair';                M0_H='( exit )'
             PROMPT='escolha uma opção'; PAUSE='tecle ENTER para voltar ao painel... '
             INVALID='opção inválida:'; BYE='sessão encerrada.'; BYE2='até mais.'
-            ANIM='animação:'; LANGSET='idioma:'; ON='on'; OFF='off'
+            LANGSET='idioma:'
             CFG_NOTFOUND='arquivo de configuração não encontrado:'
             CFG_COPY='copiando o modelo de config/config.ps1.example...'
             CFG_EDIT='edite {0} e defina $NPAD_USER antes de rodar de novo.'
@@ -326,23 +320,10 @@ function Print-InfoLine {
     Write-Line ""
 }
 
+# Banner estático. O frame é fixo de propósito: saída determinística ajuda o
+# check do painel no CI e o gerador do screenshot.
 function Print-Logo {
-    $frame = ((Get-Date).Second) % 6
-    Draw-LogoScene -t $frame
-    Print-InfoLine
-}
-
-function Animate-Intro {
-    if ($env:FISHELL_NOANIM -eq '1' -or [Console]::IsOutputRedirected) {
-        Print-Logo
-        return
-    }
-    Clear-Host
-    for ($t = 0; $t -lt 16; $t++) {
-        Write-Raw "$E[H"
-        Draw-LogoScene -t $t
-        Start-Sleep -Milliseconds 80
-    }
+    Draw-LogoScene -t 2
     Print-InfoLine
 }
 
@@ -512,8 +493,11 @@ function Action-Keygen {
         New-Item -ItemType Directory -Path $script:SSH_KEYS_DIR -Force | Out-Null
     }
     # -N '' = sem passphrase (o fluxo BatchMode/Colab depende disso).
-    # Sem conta ainda, o comentário é só "fishell" (não "fishell@fishell").
-    $comment = if ($script:NPAD_USER_SET) { "$($script:NPAD_USER)@fishell" } else { 'fishell' }
+    # O comentário da chave serve pra distinguir as chaves na lista do NPAD,
+    # então identifica a MÁQUINA de origem, não o tool.
+    # NAO usar $host: e' variavel automatica do PowerShell (read-only).
+    $machine = if ($env:COMPUTERNAME) { $env:COMPUTERNAME } else { 'local' }
+    $comment = "fishell@$machine"
     & ssh-keygen -t rsa -b 4096 -N '' -C $comment -f $key | Out-Null
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path $key)) {
         Log-Err $L.KEYGEN_FAIL
@@ -575,11 +559,10 @@ ${GB}COMMANDS${R}
 ${GB}CONTROL PANEL${R}
   ${G}1${R} shell    ${G}2${R} test     ${G}3${R} upload   ${G}4${R} download
   ${G}5${R} run      ${G}6${R} setup    ${G}7${R} status   ${G}8${R} keygen
-  ${G}l${R} language         ${G}a${R} animation        ${G}0${R}/${G}q${R} exit
+  ${G}l${R} language                          ${G}0${R}/${G}q${R} exit
 
 ${GB}ENV${R}
   ${GRAY}FISHELL_LANG=pt|en${R}  interface language (default: pt)
-  ${GRAY}FISHELL_NOANIM=1${R}    disable banner animation
   ${GRAY}NO_COLOR=1${R}          disable ansi colors
 
 ${GB}CONFIG${R}
@@ -608,11 +591,10 @@ ${GB}COMANDOS${R}
 ${GB}PAINEL${R}
   ${G}1${R} shell    ${G}2${R} testar   ${G}3${R} enviar   ${G}4${R} baixar
   ${G}5${R} comando  ${G}6${R} setup    ${G}7${R} config   ${G}8${R} chaves
-  ${G}l${R} idioma           ${G}a${R} animação         ${G}0${R}/${G}q${R} sair
+  ${G}l${R} idioma                            ${G}0${R}/${G}q${R} sair
 
 ${GB}AMBIENTE${R}
   ${GRAY}FISHELL_LANG=pt|en${R}  idioma da interface (padrão: pt)
-  ${GRAY}FISHELL_NOANIM=1${R}    desliga a animação
   ${GRAY}NO_COLOR=1${R}          desliga as cores
 
 ${GB}CONFIG${R}
@@ -642,9 +624,8 @@ function Panel-Row {
 
 function Draw-Panel {
     param([string]$Flash = '')
-    Write-Raw "${E}[H"  # cursor (0,0)
-    Draw-LogoScene -t ((Get-Date).Second)
-    Print-InfoLine
+    if (-not [Console]::IsOutputRedirected) { Write-Raw "${E}[H" }
+    Print-Logo
     Menu-Header
     if ($Flash) { Write-Line $Flash; Write-Line '' }
     Write-Line "${G}╔══════════════════════════════════════════════════╗${R}"
@@ -660,49 +641,43 @@ function Draw-Panel {
     Panel-Row $YEL '[6]' $L.M6_T $L.M6_H
     Panel-Row $YEL '[7]' $L.M7_T $L.M7_H
     Panel-Row $YEL '[8]' $L.M8_T $L.M8_H
-    $anim = if ($env:FISHELL_NOANIM -eq '1') { $L.OFF } else { $L.ON }
     Panel-Row $CYA '[l]' $L.ML_T "( $($script:FISHELL_LANG) )"
-    Panel-Row $CYA '[a]' $L.MA_T "( $anim )"
     Panel-Row $RED '[0]' $L.M0_T $L.M0_H
     Write-Line "${G}╚══════════════════════════════════════════════════╝${R}"
     # Prompt pede a opção em vez de imitar um shell: um "fishell@npad:~#"
     # dá a impressão de que dá pra digitar comando ali.
-    Write-Raw "`n  ${G}>${R} ${GB}$($L.PROMPT)${R} ${GD}[1-8, l, a, 0]${R} : "
+    Write-Raw "`n  ${G}>${R} ${GB}$($L.PROMPT)${R} ${GD}[1-8, l, 0]${R} : "
 }
 
-# Lê 1 tecla mantendo o aquário animado no topo.
+# Lê 1 tecla (sem ENTER). Sem TTY, lê uma linha e devolve '0' no EOF, para
+# pipe/CI não entrarem em loop.
 function Read-MenuKey {
-    if ($env:FISHELL_NOANIM -eq '1' -or [Console]::IsInputRedirected -or [Console]::IsOutputRedirected) {
+    if ([Console]::IsInputRedirected -or [Console]::IsOutputRedirected) {
         $s = [Console]::In.ReadLine()
         if ($null -eq $s) { return '0' }
         return $s.Trim()
     }
-    # Salva posição do cursor (no prompt)
-    Write-Raw "${E}7"
-    $t = 0
-    while ($true) {
-        Write-Raw "${E}[H"
-        Draw-LogoScene -t $t
-        Write-Raw "${E}8"
-        if ([Console]::KeyAvailable) {
-            $k = [Console]::ReadKey($false)
-            if ($k.Key -eq 'Enter') { Write-Line ''; return '' }
-            return "$($k.KeyChar)"
-        }
-        Start-Sleep -Milliseconds 120
-        $t++
-    }
+    $k = [Console]::ReadKey($false)
+    if ($k.Key -eq 'Enter') { Write-Line ''; return '' }
+    return "$($k.KeyChar)"
+}
+
+# Sem TTY (pipe, CI) o Clear-Host/cursor-home só sujaria a saída, e o banner já
+# saiu uma vez no entry point.
+function Redraw {
+    if ([Console]::IsOutputRedirected) { return }
+    Clear-Host
+    Print-Logo
 }
 
 function Menu-Loop {
     $flash = ''
     while ($true) {
-        Clear-Host
+        if (-not [Console]::IsOutputRedirected) { Clear-Host }
         Draw-Panel -Flash $flash
         $flash = ''
         $opt = Read-MenuKey
-        Clear-Host
-        Print-Logo
+        Redraw
         switch -Regex ($opt) {
             '^1$'                  { Action-Login }
             '^2$'                  { Test-Connection-Npad; Pause-Return }
@@ -712,15 +687,6 @@ function Menu-Loop {
             '^6$'                  { Setup-SSH;            Pause-Return }
             '^7$'                  { Show-Status;          Pause-Return }
             '^8$'                  { Action-Keygen;        Pause-Return }
-            '^[aA]$' {
-                if ($env:FISHELL_NOANIM -eq '1') {
-                    $env:FISHELL_NOANIM = '0'
-                    $flash = "${G}[*]${R} $($L.ANIM) ${GB}$($L.ON)${R}"
-                } else {
-                    $env:FISHELL_NOANIM = '1'
-                    $flash = "${G}[*]${R} $($L.ANIM) ${GD}$($L.OFF)${R}"
-                }
-            }
             '^[lL]$' {
                 $script:FISHELL_LANG = if ($script:FISHELL_LANG -eq 'en') { 'pt' } else { 'en' }
                 $env:FISHELL_LANG = $script:FISHELL_LANG
@@ -743,7 +709,7 @@ function Menu-Loop {
 # `help` roda antes do Load-Config: precisa funcionar sem config.ps1 ainda
 # preenchido (é assim no bash também).
 if ($Action -eq 'help') {
-    Animate-Intro
+    Print-Logo
     Show-Help
     exit 0
 }
@@ -752,16 +718,16 @@ if ($Action -eq 'help') {
 if ($Action -eq 'keygen') { Load-Config -Lenient } else { Load-Config }
 
 switch ($Action) {
-    'setup'    { Animate-Intro; Setup-SSH }
-    'login'    { Animate-Intro; Action-Login }
-    'test'     { Animate-Intro; Test-Connection-Npad }
-    'upload'   { Animate-Intro; Action-Upload }
-    'download' { Animate-Intro; Action-Download }
-    'run'      { Animate-Intro; Action-RunRemote -Command ($Rest -join ' ') }
-    'keygen'   { Animate-Intro; Action-Keygen }
-    'status'   { Animate-Intro; Show-Status }
+    'setup'    { Print-Logo; Setup-SSH }
+    'login'    { Print-Logo; Action-Login }
+    'test'     { Print-Logo; Test-Connection-Npad }
+    'upload'   { Print-Logo; Action-Upload }
+    'download' { Print-Logo; Action-Download }
+    'run'      { Print-Logo; Action-RunRemote -Command ($Rest -join ' ') }
+    'keygen'   { Print-Logo; Action-Keygen }
+    'status'   { Print-Logo; Show-Status }
     default    {
-        Animate-Intro
+        Print-Logo
         # auto-setup na primeira execução se ~/.ssh/config não tem alias
         $sshCfg = Join-Path $HOME '.ssh/config'
         $needSetup = $true
