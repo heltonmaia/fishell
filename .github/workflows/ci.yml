@@ -33,8 +33,9 @@ jobs:
           grep -q 'siga os passos' ob.txt
           grep -q 'ssh-keygen -t rsa' ob.txt
           grep -q 'npad.ufrn.br/npad/primeirospassos' ob.txt
-          test ! -e .ssh
-          rm -f ob.txt config.sh
+          test -d .ssh            # cria a pasta de chaves
+          test ! -f .ssh/id_rsa   # mas nao gera chave nenhuma
+          rm -rf .ssh ob.txt config.sh
 
       - name: com chave existente, mostra a pública para cadastrar
         run: |
