@@ -129,6 +129,8 @@ set_lang() {
         L_STEP_CONFIG="put that login in NPAD_USER"
         L_STEP_RERUN="run again"
         L_KEY_FOUND="using the key you already have:"
+        L_KEY_INVALID="the generated key did not pass validation — do NOT register it"
+        L_KEY_FILE="also saved at:"
         L_REGISTER_PUB="register this public key at npad.ufrn.br (Primeiros Passos):"
         L_THEN_CONFIG="then set NPAD_USER in config.sh and run: ./bin/fishell.sh setup"
         L_STATUS_STEP="system readout"
@@ -188,6 +190,8 @@ set_lang() {
         L_STEP_CONFIG="ponha esse login em NPAD_USER"
         L_STEP_RERUN="rode de novo"
         L_KEY_FOUND="usando a chave que já existe:"
+        L_KEY_INVALID="a chave gerada não passou na validação — NÃO cadastre esta"
+        L_KEY_FILE="também está em:"
         L_REGISTER_PUB="cadastre esta chave pública em npad.ufrn.br (Primeiros Passos):"
         L_THEN_CONFIG="depois preencha NPAD_USER no config.sh e rode: ./bin/fishell.sh setup"
         L_STATUS_STEP="configuração atual"
@@ -372,6 +376,7 @@ show_onboarding() {
     if [[ -f "$SSH_KEYS_DIR/id_rsa" ]]; then
         printf '\n%b  %s%b\n\n' "$G_DIM" "$L_KEY_FOUND" "$C_RESET"
         printf '%b%s%b\n\n' "$G_BRIGHT" "$(cat "$SSH_KEYS_DIR/id_rsa.pub" 2>/dev/null)" "$C_RESET"
+        printf '%b  %s %s%b\n\n' "$G_DIM" "$L_KEY_FILE" "$SSH_KEYS_DIR/id_rsa.pub" "$C_RESET"
     else
         ONBOARDING=1 action_keygen || return 1
     fi
@@ -545,6 +550,16 @@ action_run_remote() {
     printf '%b%s%b\n' "$G_DIM" "$L_STDOUT_END" "$C_RESET"
 }
 
+# A publica cadastrada no NPAD tem que estar integra: uma linha, prefixo
+# ssh-rsa, e aceita pelo proprio ssh-keygen.
+validate_pubkey() {
+    local pub="$1"
+    [[ -s "$pub" ]] || return 1
+    [[ "$(wc -l < "$pub")" -eq 1 ]] || return 1
+    grep -q '^ssh-rsa [A-Za-z0-9+/]\{100,\}=* ' "$pub" || return 1
+    ssh-keygen -lf "$pub" >/dev/null 2>&1 || return 1
+}
+
 action_keygen() {
     log_step "$L_KEYGEN_STEP $SSH_KEYS_DIR"
     local key="$SSH_KEYS_DIR/id_rsa"
@@ -571,6 +586,12 @@ action_keygen() {
     fi
     chmod 600 "$key"
     chmod 644 "$key.pub"
+    # Esta pública vai ser colada num formulário oficial do NPAD: valida antes
+    # de mostrar, pra ninguém cadastrar uma chave truncada ou malformada.
+    if ! validate_pubkey "$key.pub"; then
+        log_err "$L_KEY_INVALID"
+        return 1
+    fi
     log_ok "$L_KEY_CREATED $key"
     if [[ "${ONBOARDING:-0}" == "1" ]]; then
         printf '\n'
@@ -581,6 +602,7 @@ action_keygen() {
             "$G_DIM" "$L_APPEND_PUB" "$NPAD_USER" "$NPAD_HOST" "$C_RESET"
     fi
     printf '%b%s%b\n\n' "$G_BRIGHT" "$(cat "$key.pub")" "$C_RESET"
+    printf '%b  %s %s%b\n\n' "$G_DIM" "$L_KEY_FILE" "$key.pub" "$C_RESET"
     [[ "${ONBOARDING:-0}" == "1" ]] && return 0
     if [[ "${NPAD_USER_SET:-1}" == "0" ]]; then
         log_info "$L_THEN_CONFIG"

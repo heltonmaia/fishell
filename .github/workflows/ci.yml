@@ -36,6 +36,10 @@ jobs:
           grep -q 'ssh-rsa ' ob.txt                  # e imprimiu a pública
           rm -rf .ssh ob.txt config.sh
 
+      # Ultima barreira antes de o aluno colar a chave no formulario do NPAD.
+      - name: validador da chave pública
+        run: bash .github/scripts/test_validate_pubkey.sh
+
       # keygen e' o passo 1 do README e roda ANTES de o aluno ter conta no
       # NPAD — nao pode exigir NPAD_USER preenchido, senao vira impasse.
       - name: keygen funciona em clone novo, sem conta configurada
@@ -125,6 +129,13 @@ jobs:
       - name: PSScriptAnalyzer (bloqueia em erros)
         shell: pwsh
         run: .github/scripts/Invoke-Analyzer.ps1
+
+      # Parser e analyzer nao pegam erro de runtime. O caso real foi `$host`,
+      # automatica read-only, que explodiria no keygen — o comando cuja saida o
+      # aluno cola no formulario de cadastro do NPAD.
+      - name: runtime — executa o port PowerShell de ponta a ponta
+        shell: pwsh
+        run: .github/scripts/Test-Runtime.ps1
 
   paridade:
     name: paridade sh x ps1

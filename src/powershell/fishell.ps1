@@ -121,6 +121,8 @@ function Set-Lang {
             STEP_REGISTER='register the public key above (your login comes by e-mail)'
             STEP_CONFIG='put that login in $NPAD_USER'
             STEP_RERUN='run again'; KEY_FOUND='using the key you already have:'
+            KEY_INVALID='the generated key did not pass validation - do NOT register it'
+            KEY_FILE='also saved at:'
             REGISTER_PUB='register this public key at npad.ufrn.br (Primeiros Passos):'
             THEN_CONFIG="then set `$NPAD_USER in config.ps1 and run: bin\fishell.cmd setup"
             STATUS_STEP='system readout'
@@ -178,6 +180,8 @@ function Set-Lang {
             STEP_REGISTER='cadastre a chave pública acima (o login chega por e-mail)'
             STEP_CONFIG='ponha esse login em $NPAD_USER'
             STEP_RERUN='rode de novo'; KEY_FOUND='usando a chave que já existe:'
+            KEY_INVALID='a chave gerada não passou na validação - NÃO cadastre esta'
+            KEY_FILE='também está em:'
             REGISTER_PUB='cadastre esta chave pública em npad.ufrn.br (Primeiros Passos):'
             THEN_CONFIG="depois preencha `$NPAD_USER no config.ps1 e rode: bin\fishell.cmd setup"
             STATUS_STEP='configuração atual'
@@ -215,6 +219,8 @@ function Show-Onboarding {
         Write-Line "${GD}  $($L.KEY_FOUND)${R}"
         Write-Line ""
         Write-Line "${GB}$(Get-Content "$key.pub" -Raw)${R}"
+        Write-Line "${GD}  $($L.KEY_FILE) $key.pub${R}"
+        Write-Line ""
     } else {
         $script:Onboarding = $true
         Action-Keygen
@@ -481,6 +487,18 @@ function Action-RunRemote {
     Write-Line "${GD}$($L.STDOUT_END)${R}"
 }
 
+# A publica cadastrada no NPAD tem que estar integra: uma linha, prefixo
+# ssh-rsa, e aceita pelo proprio ssh-keygen.
+function Test-PubKey {
+    param([string]$Pub)
+    if (-not (Test-Path $Pub)) { return $false }
+    $lines = @(Get-Content $Pub | Where-Object { $_.Trim() })
+    if ($lines.Count -ne 1) { return $false }
+    if ($lines[0] -notmatch '^ssh-rsa [A-Za-z0-9+/]{100,}=* ') { return $false }
+    & ssh-keygen -lf $Pub 2>$null | Out-Null
+    return ($LASTEXITCODE -eq 0)
+}
+
 function Action-Keygen {
     Log-Step "$($L.KEYGEN_STEP) $($script:SSH_KEYS_DIR)"
     $key = Join-Path $script:SSH_KEYS_DIR 'id_rsa'
@@ -504,6 +522,12 @@ function Action-Keygen {
         return
     }
     Restrict-KeyAcl $key
+    # Esta pública vai ser colada num formulário oficial do NPAD: valida antes
+    # de mostrar, pra ninguém cadastrar uma chave truncada ou malformada.
+    if (-not (Test-PubKey "$key.pub")) {
+        Log-Err $L.KEY_INVALID
+        return
+    }
     Log-Ok "$($L.KEY_CREATED) $key"
     Write-Line ""
     if ($script:Onboarding) {
@@ -516,6 +540,8 @@ function Action-Keygen {
         Write-Line ""
     }
     Write-Line "${GB}$(Get-Content "$key.pub" -Raw)${R}"
+    Write-Line "${GD}  $($L.KEY_FILE) $key.pub${R}"
+    Write-Line ""
     if ($script:Onboarding) { return }
     if ($script:NPAD_USER_SET) { Log-Info $L.THEN_SETUP } else { Log-Info $L.THEN_CONFIG }
 }
