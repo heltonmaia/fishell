@@ -168,6 +168,10 @@ SSH_KEYS_DIR="/content/drive/MyDrive/SuaPasta/.ssh"
 Assim o `setup` reinstala as chaves a cada sessão nova a partir do Drive, e
 você não precisa cadastrar nada de novo no NPAD.
 
+> **Mudou o `SSH_KEYS_DIR`? Rode o `setup` de novo.** Ele é quem instala as
+> chaves no `~/.ssh`, e sem isso o `test` falha com
+> `no such identity: ~/.ssh/id_rsa`, mesmo com o caminho certo no `config.sh`.
+
 ### Preencha seu login e rode
 
 Troque `seu_usuario_aqui` pelo login do NPAD:
@@ -329,6 +333,7 @@ Dá para consultar sem abrir shell nenhum:
 
 | Problema | Solução |
 | --- | --- |
+| `no such identity: ~/.ssh/id_rsa` | Falta rodar `./bin/fishell.sh setup`, que é quem instala a chave ali |
 | `Permission denied (publickey)` | Confira o login no `config.sh` e se a chave **pública** foi cadastrada |
 | Não acho a pasta `.ssh/` | Começa com ponto, então é oculta: `ls -a` |
 | `bad interpreter: Permission denied` | Falta permissão: `chmod +x bin/fishell.sh src/bash/fishell.sh`, ou, no Drive, use `bash bin/fishell.sh` |
