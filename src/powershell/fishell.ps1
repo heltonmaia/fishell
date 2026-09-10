@@ -380,7 +380,11 @@ function Setup-SSH {
     $sshCfg = Join-Path $homeSsh 'config'
     if (-not (Test-Path $sshCfg)) { New-Item -ItemType File -Path $sshCfg -Force | Out-Null }
 
-    $existing = Get-Content $sshCfg -Raw -ErrorAction SilentlyContinue
+    # Normaliza para string: num arquivo vazio o Get-Content -Raw devolve $null,
+    # e $null/@() com -match/-notmatch nao produzem um booleano confiavel — era
+    # o que fazia o setup achar que ja' existia um "Host npad" num config vazio
+    # e recusar-se a registrar o alias.
+    $existing = [string](Get-Content $sshCfg -Raw -ErrorAction SilentlyContinue)
     $block = @"
 
 # ── fishell: begin ──
@@ -393,7 +397,13 @@ Host $($script:SSH_ALIAS)
     ServerAliveCountMax 3
 # ── fishell: end ──
 "@
-    if ($existing -match '(?ms)^# ── fishell: begin ──\s*?\r?\n.*?^# ── fishell: end ──\s*?\r?\n?') {
+    # [regex]::IsMatch sempre devolve booleano — o operador -match muda de
+    # semantica conforme o tipo do lado esquerdo.
+    $hasBlock = [regex]::IsMatch(
+        $existing, '(?ms)^# ── fishell: begin ──\s*?\r?\n.*?^# ── fishell: end ──\s*?\r?\n?')
+    $hasAlias = [regex]::IsMatch(
+        $existing, "(?m)^Host $([regex]::Escape($script:SSH_ALIAS))\s*$")
+    if ($hasBlock) {
         # bloco gerenciado pelo fishell já existe: remove e reescreve com a config atual
         $stripped = [regex]::Replace(
             $existing,
@@ -405,7 +415,7 @@ Host $($script:SSH_ALIAS)
         Set-Content -Path $sshCfg -Value $stripped.TrimEnd("`r", "`n") -NoNewline
         Add-Content -Path $sshCfg -Value $block
         Log-Ok "alias '$($script:SSH_ALIAS)' $($L.ALIAS_UPD)"
-    } elseif ($existing -notmatch "(?m)^Host $([regex]::Escape($script:SSH_ALIAS))\s*$") {
+    } elseif (-not $hasAlias) {
         Add-Content -Path $sshCfg -Value $block
         Log-Ok "alias '$($script:SSH_ALIAS)' $($L.ALIAS_REG)"
     } else {
