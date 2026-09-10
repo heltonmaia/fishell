@@ -52,6 +52,24 @@ log_err()   { printf '%b[x]%b %s\n' "$RED"        "$C_RESET" "$*" >&2; }
 log_step()  { printf '\n%b[»]%b %b%s%b\n' "$G"    "$C_RESET" "$C_BOLD" "$*" "$C_RESET"; }
 log_work()  { printf '%b[~]%b %s\n' "$G_DIM"      "$C_RESET" "$*"; }
 
+# ─── Estado do terminal ───────────────────────────────────────
+# `read -rsn1` deixa o tty em modo nao-canonico e precisa ser desfeito, senao
+# o output de subprocesso sai corrompido. Mas `stty sane` DESCARTA a
+# configuracao do terminal e impoe erase=^?; em terminais que mandam ^H no
+# backspace (o do Colab, por exemplo) o usuario fica sem conseguir apagar.
+# Guardar e restaurar o estado real resolve os dois lados.
+TTY_STATE=""
+[[ -t 0 ]] && TTY_STATE="$(stty -g 2>/dev/null || true)"
+
+tty_restore() {
+    [[ -t 0 ]] || return 0
+    if [[ -n "$TTY_STATE" ]]; then
+        stty "$TTY_STATE" 2>/dev/null || stty sane 2>/dev/null || true
+    else
+        stty sane 2>/dev/null || true
+    fi
+}
+
 # ─── Largura visível ──────────────────────────────────────────
 # Conta code points removendo os bytes de continuação UTF-8 (0x80-0xBF).
 # Necessário porque printf '%-20s' preenche por BYTE, e com LC_ALL=C até o
@@ -309,7 +327,7 @@ menu_prompt_read() {
     fi
     # read -rsn deixa o tty em modo não-canônico; sem isto o output de
     # subprocesso sai com o primeiro caractere de algumas linhas corrompido.
-    stty sane 2>/dev/null || true
+    tty_restore
 }
 
 # ─── Carrega configuração ─────────────────────────────────────
@@ -535,7 +553,7 @@ EOF
 test_connection() {
     log_step "$L_PROBE $NPAD_HOST:$NPAD_PORT"
     log_work "$L_HANDSHAKE"
-    stty sane 2>/dev/null || true
+    tty_restore
     local err
     if err=$(ssh -o ConnectTimeout=10 -o BatchMode=yes "$SSH_ALIAS" true 2>&1); then
         log_ok "$L_TUNNEL_OK $NPAD_USER@$NPAD_HOST"
@@ -600,7 +618,7 @@ action_upload() {
         log_err "'$src' $L_SRC_MISSING"
         return 1
     fi
-    stty sane 2>/dev/null || true
+    tty_restore
     log_work "$L_TRANSFERRING"
     scp -P "$NPAD_PORT" -r "$src" "${SSH_ALIAS}:${dst}" \
         && log_ok "$L_TRANSFER_OK" || log_err "$L_TRANSFER_FAIL"
@@ -615,7 +633,7 @@ action_download() {
     read_local_path dst "$L_TO_HERE" "./"
 
     [[ -z "$dst" ]] && dst="./"
-    stty sane 2>/dev/null || true
+    tty_restore
     log_work "$L_TRANSFERRING"
     scp -P "$NPAD_PORT" -r "${SSH_ALIAS}:${src}" "$dst" \
         && log_ok "$L_TRANSFER_OK" || log_err "$L_TRANSFER_FAIL"
@@ -633,7 +651,7 @@ action_run_remote() {
     # Reseta estado do terminal (o loop de animação do menu pode ter deixado
     # o tty em modo não-canônico). Sem isso, algumas linhas do output remoto
     # chegam com o primeiro char corrompido.
-    stty sane 2>/dev/null || true
+    tty_restore
     printf '%b%s%b\n' "$G_DIM" "$L_STDOUT_BEGIN" "$C_RESET"
     # -T: não aloca pseudo-tty (evita warning "stdin is not a tty" e reduz
     # chance de scripts server-side (/etc/profile, ~/.bashrc) produzirem

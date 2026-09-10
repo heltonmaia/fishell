@@ -104,6 +104,9 @@ jobs:
       - name: leitura de teclas do menu (setas, enter)
         run: bash .github/scripts/test_menu_keys.sh
 
+      - name: preserva o erase do terminal (backspace ^H)
+        run: python3 .github/scripts/test_tty_erase.py
+
       - name: validador da chave pública
         run: bash .github/scripts/test_validate_pubkey.sh
 
