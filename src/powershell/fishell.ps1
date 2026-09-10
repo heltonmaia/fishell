@@ -114,6 +114,10 @@ function Set-Lang {
             UPLOAD_STEP='upload // from your computer to npad'
             DOWNLOAD_STEP='download // from npad to your computer'
             UPLOAD_EX='e.g.  ./my_project  ->  ~/'
+            PICK_PATH='folder:'; PICK_UP='(up one level)'
+            PICK_EMPTY='(empty folder)'
+            PICK_HELP='arrows move | enter open/choose | e use this folder | t type it | q cancel'
+            PICK_SRC='choose what to send'; PICK_DST='choose where to save'
             DOWNLOAD_EX='e.g.  ~/result.h5  ->  .'
             FROM_HERE='from (here)'; TO_NPAD='to (npad)'
             FROM_NPAD='from (npad)'; TO_HERE='to (here)'
@@ -179,6 +183,10 @@ function Set-Lang {
             UPLOAD_STEP='envio // do seu computador para o npad'
             DOWNLOAD_STEP='download // do npad para o seu computador'
             UPLOAD_EX='ex.  ./meu_projeto  ->  ~/'
+            PICK_PATH='pasta:'; PICK_UP='(subir um nível)'
+            PICK_EMPTY='(pasta vazia)'
+            PICK_HELP='setas movem | enter abre/escolhe | e usar esta pasta | t digitar | q cancelar'
+            PICK_SRC='escolha o que enviar'; PICK_DST='escolha onde salvar'
             DOWNLOAD_EX='ex.  ~/resultado.h5  ->  .'
             FROM_HERE='de   (aqui)'; TO_NPAD='para (npad)'
             FROM_NPAD='de   (npad)'; TO_HERE='para (aqui)'
@@ -533,13 +541,84 @@ function Prompt-Value {
     return $v
 }
 
+# Navegador de arquivos LOCAL. Redesenha no lugar; setas movem, enter abre a
+# pasta ou escolhe o arquivo, "e" aceita a pasta atual, "t" cai no modo de
+# digitar e "q" cancela. So' vale pro lado local: navegar no NPAD exigiria um
+# `ssh ls` por tecla.
+# Devolve @{ Status = 'ok'|'cancel'|'type'; Path = '...' }.
+function Pick-LocalPath {
+    param([string]$Titulo, [string]$Start = '.')
+    if ([Console]::IsInputRedirected -or [Console]::IsOutputRedirected) {
+        return @{ Status = 'type'; Path = '' }
+    }
+    $cur = (Resolve-Path $Start).Path
+    $idx = 0; $top = 0
+    $rows = [Math]::Max(5, [Console]::WindowHeight - 10)
+
+    while ($true) {
+        $dirs  = @(Get-ChildItem -LiteralPath $cur -Force -Directory -ErrorAction SilentlyContinue |
+                   Sort-Object Name | ForEach-Object { "$($_.Name)/" })
+        $files = @(Get-ChildItem -LiteralPath $cur -Force -File -ErrorAction SilentlyContinue |
+                   Sort-Object Name | ForEach-Object { $_.Name })
+        $items = @('..') + $dirs + $files
+        $total = $items.Count
+        if ($idx -ge $total) { $idx = $total - 1 }
+        if ($idx -lt 0) { $idx = 0 }
+        if ($idx -lt $top) { $top = $idx }
+        if ($idx -ge $top + $rows) { $top = $idx - $rows + 1 }
+
+        Clear-Host
+        Write-Line ""
+        Write-Line "  ${GB}${B}$Titulo${R}"
+        Write-Line "  ${GD}$($L.PICK_PATH)${R} $cur"
+        Write-Line ""
+        if ($total -eq 1) { Write-Line "  ${GD}$($L.PICK_EMPTY)${R}" }
+        for ($i = $top; $i -lt $total -and $i -lt $top + $rows; $i++) {
+            $nome = $items[$i]
+            if ($nome -eq '..') { $nome = ".. $($L.PICK_UP)"; $cor = $CYA }
+            elseif ($nome.EndsWith('/')) { $cor = $CYA } else { $cor = $R }
+            $mark = if ($i -eq $idx) { "${GB}${B}>${R}" } else { ' ' }
+            Write-Line "  $mark ${cor}${nome}${R}"
+        }
+        if ($total -gt $top + $rows) { Write-Line "  ${GD}...${R}" }
+        Write-Line ""
+        Write-Line "  ${GD}$($L.PICK_HELP)${R}"
+
+        switch (Read-MenuKey) {
+            'up'    { if ($idx -gt 0) { $idx-- } }
+            'down'  { if ($idx -lt $total - 1) { $idx++ } }
+            'enter' {
+                $sel = $items[$idx]
+                if ($sel -eq '..') {
+                    $pai = Split-Path -Parent $cur
+                    if ($pai) { $cur = $pai }; $idx = 0; $top = 0
+                } elseif ($sel.EndsWith('/')) {
+                    $cur = Join-Path $cur $sel.TrimEnd('/'); $idx = 0; $top = 0
+                } else {
+                    return @{ Status = 'ok'; Path = (Join-Path $cur $sel) }
+                }
+            }
+            { $_ -in 'e','E' } { return @{ Status = 'ok';     Path = $cur } }
+            { $_ -in 't','T' } { return @{ Status = 'type';   Path = '' } }
+            { $_ -in 'q','Q','quit' } { return @{ Status = 'cancel'; Path = '' } }
+        }
+    }
+}
+
 function Action-Upload {
     Log-Step $L.UPLOAD_STEP
     Write-Line "  ${GD}$($L.UPLOAD_EX)${R}"
     # Rotulos dizem o papel (de/para) E o lado (aqui/npad): so' "caminho
     # local" e "caminho remoto" obriga o usuario a deduzir a direcao, e ela
     # inverte entre enviar e baixar.
-    $src = Prompt-Value -Label $L.FROM_HERE
+    $escolha = Pick-LocalPath -Titulo $L.PICK_SRC
+    if ($escolha.Status -eq 'cancel') { return }
+    if ($escolha.Status -eq 'ok') {
+        $src = $escolha.Path
+        Write-Line "  ${G}>${R} $($L.FROM_HERE) : $src"
+    } else {
+        $src = Prompt-Value -Label $L.FROM_HERE
+    }
     $dst = Prompt-Value -Label $L.TO_NPAD -Default '~/'
     if (-not (Test-Path $src)) { Log-Err "'$src' $($L.SRC_MISSING)"; return }
     Log-Work $L.TRANSFERRING
@@ -551,7 +630,14 @@ function Action-Download {
     Log-Step $L.DOWNLOAD_STEP
     Write-Line "  ${GD}$($L.DOWNLOAD_EX)${R}"
     $src = Prompt-Value -Label $L.FROM_NPAD
-    $dst = Prompt-Value -Label $L.TO_HERE -Default './'
+    $escolha = Pick-LocalPath -Titulo $L.PICK_DST
+    if ($escolha.Status -eq 'cancel') { return }
+    if ($escolha.Status -eq 'ok') {
+        $dst = $escolha.Path
+        Write-Line "  ${G}>${R} $($L.TO_HERE) : $dst"
+    } else {
+        $dst = Prompt-Value -Label $L.TO_HERE -Default './'
+    }
     Log-Work $L.TRANSFERRING
     & scp -P $script:NPAD_PORT -r "$($script:SSH_ALIAS):$src" $dst
     if ($LASTEXITCODE -eq 0) { Log-Ok $L.TRANSFER_OK } else { Log-Err $L.TRANSFER_FAIL }

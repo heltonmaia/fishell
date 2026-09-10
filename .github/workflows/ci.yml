@@ -107,6 +107,9 @@ jobs:
       - name: preserva o erase do terminal (backspace ^H)
         run: python3 .github/scripts/test_tty_erase.py
 
+      - name: seletor de arquivos local (setas, entrar em pasta)
+        run: python3 .github/scripts/test_picker.py
+
       - name: validador da chave pública
         run: bash .github/scripts/test_validate_pubkey.sh
 

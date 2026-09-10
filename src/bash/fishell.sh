@@ -138,8 +138,12 @@ set_lang() {
         L_OPEN_SHELL="opening secure shell to"; L_EXIT_HINT="(type 'exit' to return to the control panel)"
         L_UPLOAD_STEP="upload // from your computer to npad"
         L_DOWNLOAD_STEP="download // from npad to your computer"
-        L_UPLOAD_EX="e.g.  ./my_project  ->  ~/      (Tab completes local paths)"
-        L_DOWNLOAD_EX="e.g.  ~/result.h5  ->  .      (Tab completes local paths)"
+        L_UPLOAD_EX="e.g.  ./my_project  ->  ~/"
+        L_PICK_PATH="folder:"; L_PICK_UP="(up one level)"
+        L_PICK_EMPTY="(empty folder)"
+        L_PICK_HELP="arrows move | enter open/choose | e use this folder | t type it | q cancel"
+        L_PICK_SRC="choose what to send"; L_PICK_DST="choose where to save"
+        L_DOWNLOAD_EX="e.g.  ~/result.h5  ->  ."
         L_FROM_HERE="from (here)"; L_TO_NPAD="to (npad)"
         L_FROM_NPAD="from (npad)"; L_TO_HERE="to (here)"
         # so' o ps1 usa: no bash o chmod nao falha
@@ -206,8 +210,12 @@ set_lang() {
         L_OPEN_SHELL="abrindo shell em"; L_EXIT_HINT="(digite 'exit' para voltar ao painel)"
         L_UPLOAD_STEP="envio // do seu computador para o npad"
         L_DOWNLOAD_STEP="download // do npad para o seu computador"
-        L_UPLOAD_EX="ex.  ./meu_projeto  ->  ~/      (Tab completa caminhos locais)"
-        L_DOWNLOAD_EX="ex.  ~/resultado.h5  ->  .      (Tab completa caminhos locais)"
+        L_UPLOAD_EX="ex.  ./meu_projeto  ->  ~/"
+        L_PICK_PATH="pasta:"; L_PICK_UP="(subir um nível)"
+        L_PICK_EMPTY="(pasta vazia)"
+        L_PICK_HELP="setas movem | enter abre/escolhe | e usar esta pasta | t digitar | q cancelar"
+        L_PICK_SRC="escolha o que enviar"; L_PICK_DST="escolha onde salvar"
+        L_DOWNLOAD_EX="ex.  ~/resultado.h5  ->  ."
         L_FROM_HERE="de   (aqui)"; L_TO_NPAD="para (npad)"
         L_FROM_NPAD="de   (npad)"; L_TO_HERE="para (aqui)"
         L_ACL_WARN="não consegui restringir a permissão da chave; o ssh pode reclamar"
@@ -585,6 +593,72 @@ action_login() {
     ssh "$SSH_ALIAS"
 }
 
+# Navegador de arquivos LOCAL. Redesenha no lugar; setas movem, enter abre a
+# pasta ou escolhe o arquivo, "e" aceita a pasta atual, "t" cai no modo de
+# digitar e "q" cancela. So' vale pro lado local: navegar no NPAD exigiria um
+# `ssh ls` por tecla.
+#   $1 nome da variavel de saida   $2 titulo   $3 pasta inicial
+pick_local_path() {
+    local _var="$1" titulo="$2" cur
+    cur="$(cd "${3:-$PWD}" 2>/dev/null && pwd)" || cur="$PWD"
+    local idx=0 top=0 rows
+    rows=$(( $(tput lines 2>/dev/null || echo 24) - 10 ))
+    (( rows < 5 )) && rows=5
+
+    while true; do
+        local -a dirs=() files=() items=()
+        local e
+        shopt -s nullglob dotglob
+        for e in "$cur"/*; do
+            if [[ -d "$e" ]]; then dirs+=("$(basename "$e")/"); else files+=("$(basename "$e")"); fi
+        done
+        shopt -u nullglob dotglob
+        items=(".." "${dirs[@]}" "${files[@]}")
+        local total=${#items[@]}
+        (( idx >= total )) && idx=$(( total - 1 ))
+        (( idx < 0 )) && idx=0
+        (( idx < top )) && top=$idx
+        (( idx >= top + rows )) && top=$(( idx - rows + 1 ))
+
+        [[ -t 1 ]] && { clear 2>/dev/null || true; }
+        printf '\n  %b%s%b\n' "$G_BRIGHT$C_BOLD" "$titulo" "$C_RESET"
+        printf '  %b%s%b %s\n\n' "$G_DIM" "$L_PICK_PATH" "$C_RESET" "$cur"
+        if (( total == 1 )); then
+            printf '  %b%s%b\n' "$G_DIM" "$L_PICK_EMPTY" "$C_RESET"
+        fi
+        local i nome cor mark
+        for (( i = top; i < total && i < top + rows; i++ )); do
+            nome="${items[i]}"
+            if [[ "$nome" == ".." ]]; then
+                nome=".. $L_PICK_UP"; cor="$CYA"
+            elif [[ "$nome" == */ ]]; then cor="$CYA"; else cor="$C_RESET"; fi
+            if (( i == idx )); then mark="$(printf '%b>%b' "$G_BRIGHT$C_BOLD" "$C_RESET")"; else mark=" "; fi
+            printf '  %s %b%s%b\n' "$mark" "$cor" "$nome" "$C_RESET"
+        done
+        (( total > top + rows )) && printf '  %b...%b\n' "$G_DIM" "$C_RESET"
+        printf '\n  %b%s%b\n' "$G_DIM" "$L_PICK_HELP" "$C_RESET"
+
+        local k
+        menu_prompt_read k
+        case "$k" in
+            up)    (( idx > 0 )) && idx=$(( idx - 1 )) ;;
+            down)  (( idx < total - 1 )) && idx=$(( idx + 1 )) ;;
+            enter)
+                local sel="${items[idx]}"
+                if [[ "$sel" == ".." ]]; then
+                    cur="$(dirname "$cur")"; idx=0; top=0
+                elif [[ "$sel" == */ ]]; then
+                    cur="$cur/${sel%/}"; idx=0; top=0
+                else
+                    printf -v "$_var" '%s' "$cur/$sel"; return 0
+                fi ;;
+            e|E)   printf -v "$_var" '%s' "$cur"; return 0 ;;
+            t|T)   printf -v "$_var" ''; return 2 ;;
+            q|Q|quit) printf -v "$_var" ''; return 1 ;;
+        esac
+    done
+}
+
 # Lê um caminho LOCAL com completar de arquivo (Tab), via readline.
 # Os \001/\002 marcam as sequências não imprimíveis para o readline calcular
 # a largura do prompt; sem eles a linha se embaralha ao completar ou editar.
@@ -610,7 +684,16 @@ action_upload() {
     # Rotulos dizem o papel (de/para) E o lado (aqui/npad): so' "caminho
     # local" e "caminho remoto" obriga o aluno a deduzir a direcao, e ela
     # inverte entre enviar e baixar.
-    read_local_path src "$L_FROM_HERE"
+    if [[ -t 0 && -t 1 ]]; then
+        pick_local_path src "$L_PICK_SRC" "$PWD"
+        case $? in
+            1) return 0 ;;                                  # cancelou
+            2) read_local_path src "$L_FROM_HERE" ;;         # pediu pra digitar
+            *) printf '  %b>%b %s : %s\n' "$G" "$C_RESET" "$L_FROM_HERE" "$src" ;;
+        esac
+    else
+        read_local_path src "$L_FROM_HERE"
+    fi
     printf '  %b>%b %s [~/] : ' "$G" "$C_RESET" "$L_TO_NPAD"
     read -r dst
     [[ -z "$dst" ]] && dst="~/"
@@ -630,7 +713,16 @@ action_download() {
     local src dst
     printf '  %b>%b %s : ' "$G" "$C_RESET" "$L_FROM_NPAD"
     read -r src
-    read_local_path dst "$L_TO_HERE" "./"
+    if [[ -t 0 && -t 1 ]]; then
+        pick_local_path dst "$L_PICK_DST" "$PWD"
+        case $? in
+            1) return 0 ;;
+            2) read_local_path dst "$L_TO_HERE" "./" ;;
+            *) printf '  %b>%b %s : %s\n' "$G" "$C_RESET" "$L_TO_HERE" "$dst" ;;
+        esac
+    else
+        read_local_path dst "$L_TO_HERE" "./"
+    fi
 
     [[ -z "$dst" ]] && dst="./"
     tty_restore
