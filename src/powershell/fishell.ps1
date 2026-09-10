@@ -121,11 +121,10 @@ function Set-Lang {
             KEYGEN_FAIL='ssh-keygen failed'; KEY_CREATED='keypair created ->'
             APPEND_PUB='append this public key to'; THEN_SETUP="then run: bin\fishell.cmd setup"
             CFG_LATER='config.ps1 not filled in yet - going ahead just to create the key'
-            FIRSTRUN='first run - three steps and you are in:'
-            STEP_KEYGEN='create your ssh key'
-            STEP_REGISTER='register the public key (you get your login by e-mail)'
+            FIRSTRUN='three steps to go:'
+            STEP_REGISTER='register the public key above (your login comes by e-mail)'
             STEP_CONFIG='put that login in $NPAD_USER'
-            STEP_RERUN='then run again'; STEP_DONE='done'
+            STEP_RERUN='run again'; KEY_FOUND='using the key you already have:'
             REGISTER_PUB='register this public key at npad.ufrn.br (Primeiros Passos):'
             THEN_CONFIG="then set `$NPAD_USER in config.ps1 and run: bin\fishell.cmd setup"
             STATUS_STEP='system readout'
@@ -181,11 +180,10 @@ function Set-Lang {
             KEYGEN_FAIL='o ssh-keygen falhou'; KEY_CREATED='par de chaves criado ->'
             APPEND_PUB='adicione esta chave pública em'; THEN_SETUP="depois rode: bin\fishell.cmd setup"
             CFG_LATER='config.ps1 ainda não preenchido - seguindo só para criar a chave'
-            FIRSTRUN='primeira execução - três passos e você está dentro:'
-            STEP_KEYGEN='gere sua chave ssh'
-            STEP_REGISTER='cadastre a chave pública (o login chega por e-mail)'
+            FIRSTRUN='agora faltam três passos:'
+            STEP_REGISTER='cadastre a chave pública acima (o login chega por e-mail)'
             STEP_CONFIG='ponha esse login em $NPAD_USER'
-            STEP_RERUN='e rode de novo'; STEP_DONE='feito'
+            STEP_RERUN='rode de novo'; KEY_FOUND='usando a chave que já existe:'
             REGISTER_PUB='cadastre esta chave pública em npad.ufrn.br (Primeiros Passos):'
             THEN_CONFIG="depois preencha `$NPAD_USER no config.ps1 e rode: bin\fishell.cmd setup"
             STATUS_STEP='configuração atual'
@@ -203,31 +201,40 @@ $script:NPAD_PORT = '4422'
 $script:SSH_ALIAS = 'npad'
 $script:SSH_KEYS_DIR = ''
 $script:SetupOk = $false
+$script:Onboarding = $false
 
 # Roteiro de primeira execucao. Substitui o antigo "edite config.ps1 e defina
 # NPAD_USER", que era um beco sem saida: nesse ponto o usuario ainda nao TEM um
 # login do NPAD — ele so' existe depois de cadastrar a chave publica.
 function Show-Onboarding {
     param([string]$Cfg)
+    # Por definicao so' chegamos aqui sem usuario configurado.
+    $script:NPAD_USER_SET = $false
     if ((Get-Location).Path -eq $RepoRoot) { $Cfg = 'config.ps1' }
-    $keys = if ($script:SSH_KEYS_DIR) { $script:SSH_KEYS_DIR } else { Join-Path $RepoRoot '.ssh' }
-    $hasKey = Test-Path (Join-Path $keys 'id_rsa')
+    if (-not $script:SSH_KEYS_DIR) { $script:SSH_KEYS_DIR = Join-Path $RepoRoot '.ssh' }
+    $key = Join-Path $script:SSH_KEYS_DIR 'id_rsa'
 
-    Write-Line ""
+    # A chave e' pre-requisito de qualquer caminho, entao gera aqui mesmo em vez
+    # de mandar o aluno rodar `keygen` so' pra voltar a este ponto.
+    if (Test-Path $key) {
+        Write-Line ""
+        Write-Line "${GD}  $($L.KEY_FOUND)${R}"
+        Write-Line ""
+        Write-Line "${GB}$(Get-Content "$key.pub" -Raw)${R}"
+    } else {
+        $script:Onboarding = $true
+        Action-Keygen
+        $script:Onboarding = $false
+    }
+
     Write-Line "  ${GB}${B}$($L.FIRSTRUN)${R}"
     Write-Line ""
-    if ($hasKey) {
-        Write-Line "  ${GB}v${R} $($L.STEP_KEYGEN) ${GD}($($L.STEP_DONE))${R}"
-    } else {
-        Write-Line "  ${YEL}1.${R} $($L.STEP_KEYGEN)"
-        Write-Line "     ${G}PS> bin\fishell.cmd keygen${R}"
-    }
-    Write-Line "  ${YEL}2.${R} $($L.STEP_REGISTER)"
+    Write-Line "  ${YEL}1.${R} $($L.STEP_REGISTER)"
     Write-Line "     ${CYA}https://npad.ufrn.br/npad/primeirospassos${R}"
-    Write-Line "  ${YEL}3.${R} $($L.STEP_CONFIG)"
+    Write-Line "  ${YEL}2.${R} $($L.STEP_CONFIG)"
     Write-Line "     ${G}PS> notepad $Cfg${R}"
-    Write-Line ""
-    Write-Line "  ${GD}$($L.STEP_RERUN):${R} ${G}PS> bin\fishell.cmd${R}"
+    Write-Line "  ${YEL}3.${R} $($L.STEP_RERUN)"
+    Write-Line "     ${G}PS> bin\fishell.cmd${R}"
     Write-Line ""
 }
 
@@ -515,13 +522,17 @@ function Action-Keygen {
     Restrict-KeyAcl $key
     Log-Ok "$($L.KEY_CREATED) $key"
     Write-Line ""
-    if ($script:NPAD_USER_SET) {
+    if ($script:Onboarding) {
+        # No roteiro de 1a execucao quem imprime os proximos passos e' ele.
+    } elseif ($script:NPAD_USER_SET) {
         Write-Line "${GD}  $($L.APPEND_PUB) $($script:NPAD_USER)@$($script:NPAD_HOST):~/.ssh/authorized_keys${R}"
+        Write-Line ""
     } else {
         Write-Line "${GD}  $($L.REGISTER_PUB)${R}"
+        Write-Line ""
     }
-    Write-Line ""
     Write-Line "${GB}$(Get-Content "$key.pub" -Raw)${R}"
+    if ($script:Onboarding) { return }
     if ($script:NPAD_USER_SET) { Log-Info $L.THEN_SETUP } else { Log-Info $L.THEN_CONFIG }
 }
 

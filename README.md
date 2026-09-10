@@ -55,6 +55,9 @@ O `keygen` é o único comando que roda **sem** `config.sh` preenchido — de
 propósito: você ainda não tem usuário do NPAD neste ponto, e a chave é
 justamente o pré-requisito do cadastro que vai criar esse usuário.
 
+Na prática você nem precisa lembrar dele: rodando `bash bin/fishell.sh` num
+clone novo, o fishell gera a chave sozinho e mostra os passos que faltam.
+
 Ou, sem o fishell, o comando da documentação oficial: `ssh-keygen -t rsa`
 (dê enter em todas as perguntas), e depois `cat ~/.ssh/id_rsa.pub`.
 
