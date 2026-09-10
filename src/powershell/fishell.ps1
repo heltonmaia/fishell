@@ -1,5 +1,5 @@
 ﻿# ═══════════════════════════════════════════════════════════════════════════
-#  fishell.ps1 — porta Windows/PowerShell do fishell
+#  fishell.ps1, porta Windows/PowerShell do fishell
 #  Acesso SSH rápido ao NPAD/UFRN (sc2.npad.ufrn.br:4422).
 #
 #  Requisitos:
@@ -30,7 +30,7 @@ $ErrorActionPreference = 'Stop'
 $FishellVersion = '2.6'
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 # O codigo vive em src/powershell/, mas config.ps1 e .ssh/ sao do usuario e
-# ficam na raiz do repo — dois niveis acima.
+# ficam na raiz do repo, dois niveis acima.
 $RepoRoot = Split-Path -Parent (Split-Path -Parent $ScriptDir)
 
 # UTF-8 no console pra Unicode (blocos, box drawing, ·, °).
@@ -197,7 +197,7 @@ $script:Onboarding = $false
 
 # Roteiro de primeira execucao. Substitui o antigo "edite config.ps1 e defina
 # NPAD_USER", que era um beco sem saida: nesse ponto o usuario ainda nao TEM um
-# login do NPAD — ele so' existe depois de cadastrar a chave publica.
+# login do NPAD, ele so' existe depois de cadastrar a chave publica.
 function Show-Onboarding {
     param([string]$Cfg)
     # Por definicao so' chegamos aqui sem usuario configurado.
@@ -213,7 +213,7 @@ function Show-Onboarding {
 
     if (Test-Path $pub) {
         # Ja' tem chave: mostra a publica pra copiar, conferindo a integridade
-        # antes — ela vai colada num formulario oficial do NPAD.
+        # antes, ela vai colada num formulario oficial do NPAD.
         if (Test-PubKey $pub) {
             Write-Line "  ${GD}$($L.KEY_FOUND)${R}"
             Write-Line ""
@@ -244,7 +244,7 @@ function Show-Onboarding {
 }
 
 # -Lenient: nao aborta se $NPAD_USER ainda nao estiver preenchido. Usado pelo
-# `keygen`, que roda ANTES de o usuario ter conta no NPAD — exigir NPAD_USER ali
+# `keygen`, que roda ANTES de o usuario ter conta no NPAD, exigir NPAD_USER ali
 # seria um impasse, ja que a chave e' pre-requisito do cadastro que gera o
 # usuario.
 function Load-Config {
@@ -377,7 +377,7 @@ function Setup-SSH {
     if (-not (Test-Path $sshCfg)) { New-Item -ItemType File -Path $sshCfg -Force | Out-Null }
 
     # Normaliza para string: num arquivo vazio o Get-Content -Raw devolve $null,
-    # e $null/@() com -match/-notmatch nao produzem um booleano confiavel — era
+    # e $null/@() com -match/-notmatch nao produzem um booleano confiavel, era
     # o que fazia o setup achar que ja' existia um "Host npad" num config vazio
     # e recusar-se a registrar o alias.
     $existing = [string](Get-Content $sshCfg -Raw -ErrorAction SilentlyContinue)
@@ -393,7 +393,7 @@ Host $($script:SSH_ALIAS)
     ServerAliveCountMax 3
 # ── fishell: end ──
 "@
-    # [regex]::IsMatch sempre devolve booleano — o operador -match muda de
+    # [regex]::IsMatch sempre devolve booleano, o operador -match muda de
     # semantica conforme o tipo do lado esquerdo.
     $hasBlock = [regex]::IsMatch(
         $existing, '(?ms)^# ── fishell: begin ──\s*?\r?\n.*?^# ── fishell: end ──\s*?\r?\n?')

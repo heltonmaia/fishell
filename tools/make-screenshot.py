@@ -49,7 +49,7 @@ def capture(lang="pt"):
             conf = f.read().replace('NPAD_USER="seu_usuario_aqui"', 'NPAD_USER="usuario"')
         with open(cfg, "w", encoding="utf-8") as f:
             f.write(conf)
-        # script(1) dá um pty ao filho — sem isso o fishell desliga as cores.
+        # script(1) dá um pty ao filho, sem isso o fishell desliga as cores.
         # Manda "0" (sair) pelo pty: o menu lê uma tecla sem ENTER, então um
         # stdin fechado o deixaria esperando para sempre.
         out = subprocess.run(
@@ -63,11 +63,11 @@ def capture(lang="pt"):
 def parse(raw):
     """Extrai o frame do menu e devolve linhas de runs (cor, negrito, texto)."""
     frames = re.split(r"\x1b\[H\x1b\[2J\x1b\[3J", raw)
-    # '╠' só existe na caixa do painel — a arte do logo usa ╔ ╗ ╚ ╝ ═ ║, nunca ╠.
+    # '╠' só existe na caixa do painel, a arte do logo usa ╔ ╗ ╚ ╝ ═ ║, nunca ╠.
     # (Procurar pelo título não serve: ele muda de idioma.)
     frame = next((f for f in reversed(frames) if "╠" in f), None)
     if frame is None:
-        sys.exit("painel não encontrado na captura — o fishell chegou a rodar?")
+        sys.exit("painel não encontrado na captura, o fishell chegou a rodar?")
 
     tok = re.compile(r"\x1b\[([0-9;]*)m")
     lines, color, bold = [], FG, False

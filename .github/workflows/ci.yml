@@ -85,7 +85,7 @@ jobs:
           b=$(awk 'NF{exit} {c++} END{print c+0}' ~/.ssh/config)
           test "$b" -le 1 || { echo "linhas em branco acumulando no topo: $b"; exit 1; }
 
-      # Em pt o painel tem acento, e printf '%-20s' preenche por BYTE — por
+      # Em pt o painel tem acento, e printf '%-20s' preenche por BYTE, por
       # isso as duas línguas precisam ser checadas, não só uma.
       # No Colab o repo costuma ficar no Drive, um mount FUSE onde o bit de
       # execução do git não sobrevive. O wrapper tem que continuar funcionando.
@@ -113,7 +113,7 @@ jobs:
       - uses: actions/checkout@v4
 
       # Windows PowerShell 5.1 lê .ps1 sem BOM como ANSI e destrói toda a UI
-      # Unicode — inclusive as sentinelas do bloco no ~/.ssh/config.
+      # Unicode, inclusive as sentinelas do bloco no ~/.ssh/config.
       - name: BOM UTF-8 obrigatório
         run: |
           if [ "$(head -c 3 src/powershell/fishell.ps1 | od -An -tx1 | tr -d ' \n')" != "efbbbf" ]; then
@@ -130,9 +130,9 @@ jobs:
         run: .github/scripts/Invoke-Analyzer.ps1
 
       # Parser e analyzer nao pegam erro de runtime. O caso real foi `$host`,
-      # automatica read-only, que explodiria no keygen — o comando cuja saida o
+      # automatica read-only, que explodiria no keygen, o comando cuja saida o
       # aluno cola no formulario de cadastro do NPAD.
-      - name: runtime — executa o port PowerShell de ponta a ponta
+      - name: runtime, executa o port PowerShell de ponta a ponta
         shell: pwsh
         run: .github/scripts/Test-Runtime.ps1
 

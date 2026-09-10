@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # ═══════════════════════════════════════════════════════════════
-#  FISHELL — NPAD/UFRN SSH access terminal
+#  FISHELL: NPAD/UFRN SSH access terminal
 #  https://github.com/heltonmaia/fishell
 # ═══════════════════════════════════════════════════════════════
 set -o pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # O codigo vive em src/bash/, mas config.sh e .ssh/ sao do usuario e ficam na
-# raiz do repo — dois niveis acima.
+# raiz do repo, dois niveis acima.
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 FISHELL_VERSION="2.6"
 
@@ -55,7 +55,7 @@ log_work()  { printf '%b[~]%b %s\n' "$G_DIM"      "$C_RESET" "$*"; }
 # ─── Largura visível ──────────────────────────────────────────
 # Conta code points removendo os bytes de continuação UTF-8 (0x80-0xBF).
 # Necessário porque printf '%-20s' preenche por BYTE, e com LC_ALL=C até o
-# ${#s} do bash conta bytes — qualquer acento desalinharia o painel de 50
+# ${#s} do bash conta bytes, qualquer acento desalinharia o painel de 50
 # colunas. Este cálculo dá o mesmo resultado em qualquer locale.
 vlen() {
     local s="${1//[$'\x80'-$'\xBF']/}"
@@ -107,14 +107,14 @@ set_lang() {
         L_PRIV_OK="private key deployed -> ~/.ssh/id_rsa"
         L_PUB_OK="public key deployed -> ~/.ssh/id_rsa.pub"; L_KH_OK="known_hosts deployed"
         L_ALIAS_UPD="updated in ~/.ssh/config"; L_ALIAS_REG="registered in ~/.ssh/config"
-        L_ALIAS_KEPT="exists in ~/.ssh/config but was not created by fishell — kept as is"
+        L_ALIAS_KEPT="exists in ~/.ssh/config but was not created by fishell, kept as is"
         L_READY="payload ready. connect with:"
         L_PROBE="probing target"; L_HANDSHAKE="dispatching handshake (10s timeout)..."
         L_TUNNEL_OK="tunnel established ::"; L_HANDSHAKE_FAIL="handshake failed:"
         L_HINT_KEY="your public key is not registered at NPAD yet, or NPAD_USER is wrong"
-        L_HINT_HOSTKEY="missing known_hosts, or the server key changed — see the README"
-        L_HINT_NET="no route to the server — firewall, or port 4422 blocked"
-        L_HINT_DNS="could not resolve the host — check your connection"
+        L_HINT_HOSTKEY="missing known_hosts, or the server key changed. Veja o README"
+        L_HINT_NET="no route to the server: firewall, or port 4422 blocked"
+        L_HINT_DNS="could not resolve the host, check your connection"
         L_OPEN_SHELL="opening secure shell to"; L_EXIT_HINT="(type 'exit' to return to the control panel)"
         L_UPLOAD_STEP="upload // local -> npad"; L_DOWNLOAD_STEP="download // npad -> local"
         L_LOCAL_PATH="local path"; L_REMOTE_PATH="remote path"
@@ -122,12 +122,12 @@ set_lang() {
         L_TRANSFER_OK="transfer complete"; L_TRANSFER_FAIL="transfer failed"
         L_REMOTE_EXEC="remote exec //"; L_CMD="cmd"; L_EMPTY_CMD="empty command, aborted."
         L_STDOUT_BEGIN="─── remote stdout ───"; L_STDOUT_END="─── end ─────────────"
-        L_FIRSTRUN="first run — follow the steps:"
+        L_FIRSTRUN="first run, follow the steps:"
         L_STEP_REGISTER="register your public key (your login comes by e-mail)"
         L_STEP_CONFIG="put that login in NPAD_USER"
         L_STEP_RERUN="run again"
         L_KEY_FOUND="your public key:"
-        L_KEY_INVALID="this public key does not look valid — do NOT register it"
+        L_KEY_INVALID="this public key does not look valid, do NOT register it"
         L_KEY_FILE="file:"
         L_STEP_KEYGEN="create your ssh key (skip if you already have one)"
         L_STATUS_STEP="system readout"
@@ -165,14 +165,14 @@ set_lang() {
         L_PRIV_OK="chave privada instalada -> ~/.ssh/id_rsa"
         L_PUB_OK="chave pública instalada -> ~/.ssh/id_rsa.pub"; L_KH_OK="known_hosts instalado"
         L_ALIAS_UPD="atualizado no ~/.ssh/config"; L_ALIAS_REG="registrado no ~/.ssh/config"
-        L_ALIAS_KEPT="já existe no ~/.ssh/config e não foi criado pelo fishell — mantido como está"
+        L_ALIAS_KEPT="já existe no ~/.ssh/config e não foi criado pelo fishell, mantido como está"
         L_READY="tudo pronto. conecte com:"
         L_PROBE="testando"; L_HANDSHAKE="enviando handshake (limite de 10s)..."
         L_TUNNEL_OK="conexão estabelecida ::"; L_HANDSHAKE_FAIL="falhou:"
         L_HINT_KEY="sua chave pública ainda não está cadastrada no NPAD, ou o NPAD_USER está errado"
-        L_HINT_HOSTKEY="falta o known_hosts, ou a chave do servidor mudou — veja o README"
-        L_HINT_NET="sem rota até o servidor — firewall, ou porta 4422 bloqueada"
-        L_HINT_DNS="não consegui resolver o host — confira sua conexão"
+        L_HINT_HOSTKEY="falta o known_hosts, ou a chave do servidor mudou. Veja o README"
+        L_HINT_NET="sem rota até o servidor: firewall, ou porta 4422 bloqueada"
+        L_HINT_DNS="não consegui resolver o host, confira sua conexão"
         L_OPEN_SHELL="abrindo shell em"; L_EXIT_HINT="(digite 'exit' para voltar ao painel)"
         L_UPLOAD_STEP="envio // local -> npad"; L_DOWNLOAD_STEP="download // npad -> local"
         L_LOCAL_PATH="caminho local"; L_REMOTE_PATH="caminho remoto"
@@ -180,12 +180,12 @@ set_lang() {
         L_TRANSFER_OK="transferência concluída"; L_TRANSFER_FAIL="a transferência falhou"
         L_REMOTE_EXEC="comando remoto //"; L_CMD="comando"; L_EMPTY_CMD="comando vazio, cancelado."
         L_STDOUT_BEGIN="─── saída remota ────"; L_STDOUT_END="─── fim ─────────────"
-        L_FIRSTRUN="primeira execução — siga os passos:"
+        L_FIRSTRUN="primeira execução, siga os passos:"
         L_STEP_REGISTER="cadastre a chave pública (o login chega por e-mail)"
         L_STEP_CONFIG="ponha esse login em NPAD_USER"
         L_STEP_RERUN="rode de novo"
         L_KEY_FOUND="sua chave pública:"
-        L_KEY_INVALID="esta chave pública não parece válida — NÃO cadastre ela"
+        L_KEY_INVALID="esta chave pública não parece válida, NÃO cadastre ela"
         L_KEY_FILE="arquivo:"
         L_STEP_KEYGEN="gere sua chave ssh (pule se já tiver uma)"
         L_STATUS_STEP="configuração atual"
@@ -340,7 +340,7 @@ resolve_keys_dir() {
 
 # Roteiro de primeira execucao. Substitui o antigo "edite config.sh e defina
 # NPAD_USER", que era um beco sem saida: nesse ponto o usuario ainda nao TEM
-# um login do NPAD — ele so' existe depois de cadastrar a chave publica.
+# um login do NPAD, ele so' existe depois de cadastrar a chave publica.
 show_onboarding() {
     local cfg="$1"
     # Na raiz do repo mostra so' "config.sh": o caminho absoluto do Colab e'
@@ -354,7 +354,7 @@ show_onboarding() {
 
     if [[ -f "$pub" ]]; then
         # Ja' tem chave: mostra a publica pra copiar, conferindo a integridade
-        # antes — ela vai colada num formulario oficial do NPAD.
+        # antes, ela vai colada num formulario oficial do NPAD.
         if validate_pubkey "$pub"; then
             printf '  %b%s%b\n\n' "$G_DIM" "$L_KEY_FOUND" "$C_RESET"
             printf '%b%s%b\n\n' "$G_BRIGHT" "$(cat "$pub")" "$C_RESET"
@@ -673,7 +673,7 @@ menu_header() {
 }
 
 # Sem TTY (pipe, célula de notebook, CI) o `clear` só vazaria escape na saída,
-# e o banner já foi impresso uma vez pelo main — então nada de redesenhar.
+# e o banner já foi impresso uma vez pelo main, então nada de redesenhar.
 redraw() {
     [[ -t 1 ]] || return 0
     clear 2>/dev/null || true

@@ -6,7 +6,7 @@
 # o e-mail chega, e so' na hora de conectar e' que falha.
 #
 # A funcao e' extraida do fonte (nao reescrita aqui) pra o teste valer sobre o
-# codigo de verdade — sourcear o script inteiro dispararia o main().
+# codigo de verdade, sourcear o script inteiro dispararia o main().
 set -euo pipefail
 
 eval "$(sed -n '/^validate_pubkey()/,/^}/p' src/bash/fishell.sh)"

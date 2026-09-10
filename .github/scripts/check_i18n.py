@@ -22,7 +22,7 @@ ps = io.open(PS1, encoding="utf-8-sig").read()
 sh_block = re.search(r"set_lang\(\) \{.*?\n\}\n", sh, re.S)
 ps_block = re.search(r"function Set-Lang \{.*?\n\}\nSet-Lang", ps, re.S)
 if not sh_block or not ps_block:
-    sys.exit("não achei set_lang / Set-Lang — a estrutura mudou?")
+    sys.exit("não achei set_lang / Set-Lang, a estrutura mudou?")
 
 sh_keys = set(re.findall(r"\bL_([A-Z0-9_]+)=", sh_block.group(0)))
 ps_keys = set(re.findall(r"(?:^|[{;\s])([A-Z][A-Z0-9_]*)=", ps_block.group(0), re.M))
@@ -45,4 +45,4 @@ if problems:
         print("  " + p)
     sys.exit(1)
 
-print(f"i18n ok — {len(sh_keys)} chaves idênticas nos dois ports")
+print(f"i18n ok, {len(sh_keys)} chaves idênticas nos dois ports")

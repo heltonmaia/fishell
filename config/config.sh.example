@@ -1,10 +1,10 @@
 # ═══════════════════════════════════════════════════════════════
-#  FISHELL — Configuração do usuário (Linux / macOS / WSL / Colab)
+#  FISHELL: Configuração do usuário (Linux / macOS / WSL / Colab)
 #  Copie este arquivo para `config.sh` e edite os valores abaixo.
 #
 #      cp config/config.sh.example config.sh
 #
-#  E edite. No Colab, 2 cliques no arquivo pelo painel Arquivos — o terminal
+#  E edite. No Colab, 2 cliques no arquivo pelo painel Arquivos, o terminal
 #  de lá não tem `nano`.
 #
 #  O arquivo `config.sh` é ignorado pelo Git (nunca é commitado).
@@ -28,7 +28,7 @@ NPAD_PORT="4422"
 #   SSH_KEYS_DIR="/content/drive/MyDrive/Classes/2026.2_DL/npad/.ssh"
 #
 # (Se ficar vazio e existir /content/drive/MyDrive/visaocomputacional/.ssh, essa
-# pasta é usada — atalho antigo da turma de Visão Computacional.)
+# pasta é usada, atalho antigo da turma de Visão Computacional.)
 SSH_KEYS_DIR=""
 
 # Alias SSH usado no comando `ssh <alias>` (padrão: npad)

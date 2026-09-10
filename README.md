@@ -2,7 +2,7 @@
 
 Acesso rápido ao **NPAD/UFRN**, o supercomputador do IMD. Registra o alias
 `npad`, guarda suas chaves onde o Colab não apaga, e reúne conectar, enviar,
-baixar e rodar comando num painel — sem repetir `-p4422` em tudo.
+baixar e rodar comando num painel, sem repetir `-p4422` em tudo.
 
 Comece pela **parte 1**: o acesso na mão, sem ferramenta nenhuma.
 
@@ -18,18 +18,18 @@ Comece pela **parte 1**: o acesso na mão, sem ferramenta nenhuma.
 flowchart TB
     A["<b>Sua máquina</b><br/>código · dados"]
 
-    subgraph NPAD["NPAD — sc2.npad.ufrn.br:4422"]
+    subgraph NPAD["NPAD · sc2.npad.ufrn.br:4422"]
         B["<b>nó de login</b><br/>editar · compilar · testar"]
         C["<b>nós de computação</b><br/>o treino roda aqui"]
         B -->|"<b>sbatch</b>"| C
     end
 
-    A -->|"<b>ssh</b> — terminal remoto"| B
-    A <-->|"<b>scp</b> — arquivos"| B
+    A -->|"<b>ssh</b> · terminal remoto"| B
+    A <-->|"<b>scp</b> · arquivos"| B
 ```
 
 **`ssh`** te dá um terminal lá dentro; **`scp`** move arquivos. Você conecta no
-*nó de login* — o trabalho pesado vai para os *nós de computação*, via
+*nó de login*. O trabalho pesado vai para os *nós de computação*, via
 `sbatch`.
 
 ---
@@ -41,7 +41,7 @@ funcionar, nenhuma ferramenta conserta.
 
 ### Gere sua chave
 
-O NPAD só aceita login por chave — não existe senha. E a chave precisa ser
+O NPAD só aceita login por chave, não existe senha. E a chave precisa ser
 **RSA**. Dê enter em todas as perguntas:
 
 ```bash
@@ -90,14 +90,14 @@ scp -P4422 SEU_LOGIN@sc2.npad.ufrn.br:~/resultado.h5 .
 > ssh -i /content/drive/MyDrive/SuaPasta/.ssh/id_rsa -p4422 SEU_LOGIN@sc2.npad.ufrn.br
 > ```
 >
-> Repetir `-i` e `-p` em todo comando cansa — é o que a parte 3 resolve.
+> Repetir `-i` e `-p` em todo comando cansa, e é isso que a parte 3 resolve.
 
 ---
 
 ## 2. Por que o fishell
 
 Com o acesso funcionando, o que sobra é repetição: a porta em todo comando, o
-caminho longo em todo `scp`, e — no Colab — reinstalar a chave a cada reinício
+caminho longo em todo `scp`, e, no Colab, reinstalar a chave a cada reinício
 da VM.
 
 A [documentação do NPAD](https://github.com/NPAD-UFRN/Tutorials) já resolve a
@@ -105,14 +105,14 @@ primeira, ensinando a criar um alias no `~/.ssh/config`. O fishell escreve esse
 bloco para você, guarda as chaves onde o Colab não apaga, e junta tudo num
 painel.
 
-Ele usa o mesmo `ssh` e o mesmo `scp` — depois do `setup`, `ssh npad` funciona
+Ele usa o mesmo `ssh` e o mesmo `scp`. Depois do `setup`, `ssh npad` funciona
 até sem ele.
 
 ---
 
 ## 3. Instalar o fishell
 
-**Google Colab** — abra o **Terminal** (ícone no canto inferior esquerdo) e
+**Google Colab**: abra o **Terminal** (ícone no canto inferior esquerdo) e
 trabalhe por ele, com o Drive já montado. Daqui em diante é shell comum.
 
 ```bash
@@ -131,7 +131,7 @@ chmod +x bin/fishell.sh src/bash/fishell.sh
 cp config/config.sh.example config.sh
 ```
 
-**Windows** — precisa do OpenSSH Client (já vem no Windows 10+).
+**Windows**: precisa do OpenSSH Client (já vem no Windows 10+).
 
 ```powershell
 git clone https://github.com/heltonmaia/fishell.git
@@ -144,7 +144,7 @@ Copy-Item config\config.ps1.example config.ps1
 
 ### Aponte para suas chaves
 
-Aponte o `config.sh` para onde suas chaves já estão — melhor que copiar, que
+Aponte o `config.sh` para onde suas chaves já estão. É melhor que copiar, que
 deixaria a mesma chave privada em dois lugares:
 
 ```bash
@@ -161,7 +161,7 @@ sed -i 's/seu_usuario_aqui/SEU_LOGIN/' config.sh
 ```
 
 (No macOS o `sed` pede um argumento a mais: `sed -i '' 's/.../.../'`. Ou abra
-no editor que preferir — é um shell script comum.)
+no editor que preferir, é um shell script comum.)
 
 ```bash
 ./bin/fishell.sh setup     # instala as chaves e registra o alias npad
@@ -172,7 +172,7 @@ no editor que preferir — é um shell script comum.)
 No Colab, **repita o `setup` toda vez que a VM reiniciar**: o `~/.ssh` da
 máquina virtual é descartado junto com ela, e é ele que o `ssh` consulta.
 
-> `config.sh` e `.ssh/` são seus e não são versionados, de propósito — para o
+> `config.sh` e `.ssh/` são seus e não são versionados, de propósito, para o
 > seu login e sua chave privada nunca irem parar num commit. A consequência:
 > apagar e clonar o repo de novo leva os dois. Guardar as chaves fora da pasta
 > do fishell, via `SSH_KEYS_DIR`, evita isso.
@@ -181,7 +181,7 @@ máquina virtual é descartado junto com ela, e é ele que o `ssh` consulta.
 
 ## 4. O painel
 
-Cada tecla é uma ação — não precisa dar ENTER.
+Cada tecla é uma ação, não precisa dar ENTER.
 
 | tecla | ação |
 | --- | --- |
@@ -233,7 +233,7 @@ Para mudar o idioma de forma permanente, edite `FISHELL_LANG` no `config.sh`.
 | é onde você cai ao conectar | sim | não |
 | serve para | editar, compilar, **testar** | rodar de verdade |
 | como executa | `./meuscript` | `sbatch meuscript` |
-| limite | ~30 min com 1 core, e **bem menos** com mais CPUs — depois o processo é morto | horas, conforme o `--time` do script |
+| limite | ~30 min com 1 core, e **bem menos** com mais CPUs; depois o processo é morto | horas, conforme o `--time` do script |
 
 **Nunca** deixe um treinamento no nó de login: ele é derrubado, e você atrapalha
 todo mundo que está logado.
@@ -259,7 +259,7 @@ cat slurm-14518.out     # a saída vai para este arquivo, não para a tela
 
 | partição | para quê |
 | --- | --- |
-| `amd-512` | uso geral — na dúvida, comece aqui |
+| `amd-512` | uso geral; na dúvida, comece aqui |
 | `intel-*` | uso geral (variantes Intel) |
 | `gpu-8-v100` | 8 GPUs NVIDIA V100 |
 | `gpu-4-a100` | 4 GPUs NVIDIA A100 |
@@ -315,9 +315,9 @@ Dá para consultar sem abrir shell nenhum:
 | --- | --- |
 | `Permission denied (publickey)` | Confira o login no `config.sh` e se a chave **pública** foi cadastrada |
 | Não acho a pasta `.ssh/` | Começa com ponto, então é oculta: `ls -a` |
-| `bad interpreter: Permission denied` | Falta permissão: `chmod +x bin/fishell.sh src/bash/fishell.sh` — ou, no Drive, use `bash bin/fishell.sh` |
+| `bad interpreter: Permission denied` | Falta permissão: `chmod +x bin/fishell.sh src/bash/fishell.sh`, ou, no Drive, use `bash bin/fishell.sh` |
 | Conexão trava ou dá timeout | `./bin/fishell.sh test` mostra o erro do SSH e sugere a causa |
-| `Host key verification failed` | Falta o `known_hosts`, ou o servidor trocou de chave — veja abaixo |
+| `Host key verification failed` | Falta o `known_hosts`, ou o servidor trocou de chave. Veja abaixo |
 | O alias `npad` não foi registrado | Você já tinha um `Host npad` no `~/.ssh/config`. Remova o seu, ou troque `SSH_ALIAS` no `config.sh` |
 | No Colab, parou depois de um tempo | A VM reiniciou: `bash bin/fishell.sh setup` |
 | Job fica parado na fila | `squeue --start` mostra a previsão; `sinfo` mostra se a partição está cheia |
@@ -340,7 +340,7 @@ ssh-keygen -lf .ssh/known_hosts
 | RSA | `SHA256:mUQ9ZrO4/2PYJHKx2Jh/OwN8LbPzPkfbiqzNv84be1E` |
 | ECDSA | `SHA256:PAAyt3VUyhhmNyZBVuWQB3b4w5XRh8gDTiaD+2Q3ef8` |
 
-O `ssh-keyscan` aceita qualquer chave que o servidor apresentar — é a
+O `ssh-keyscan` aceita qualquer chave que o servidor apresentar. É a
 comparação com a tabela que vira verificação. Não bateu? Não prossiga; fale com
 `atendimento@npad.ufrn.br`.
 

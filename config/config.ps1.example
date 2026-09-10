@@ -1,5 +1,5 @@
 # ═══════════════════════════════════════════════════════════════
-#  FISHELL — Configuração do usuário (Windows / PowerShell)
+#  FISHELL: Configuração do usuário (Windows / PowerShell)
 #  Copie este arquivo para `config.ps1` e edite os valores abaixo.
 #
 #      Copy-Item config\config.ps1.example config.ps1

@@ -6,7 +6,7 @@ do Slurm (parte 6).
 
 Duas decisões do texto que é fácil desfazer sem querer: o README **começa pelo
 `ssh` cru**, sem o fishell, porque isso separa "meu acesso está ok?" de "a
-ferramenta está configurada?" — as duas metades ficaram indistinguíveis no uso
+ferramenta está configurada?", as duas metades ficaram indistinguíveis no uso
 real e custaram horas. E ele **não menciona o notebook do Colab** (células,
 `%cd`, painel Arquivos): tudo é feito pelo terminal, para as instruções valerem
 igual em Colab, Linux e WSL.
@@ -14,7 +14,7 @@ igual em Colab, Linux e WSL.
 ## Estrutura
 
 ```
-bin/     entrypoints (wrappers finos — é por aqui que o usuário roda)
+bin/     entrypoints (wrappers finos, é por aqui que o usuário roda)
   fishell.sh     Linux / macOS / WSL / Colab
   fishell.cmd    Windows
 src/     os dois ports de verdade
@@ -28,7 +28,7 @@ tools/   make-screenshot.py
 `config.sh` / `config.ps1` (a config do usuário) e `.ssh/` (as chaves) ficam na
 **raiz** do repo, não ao lado do script. Os dois ports resolvem isso subindo
 dois níveis a partir do próprio diretório (`REPO_ROOT` no bash, `$RepoRoot` no
-ps1) — é o que mantém a config do usuário fora do `src/` e no lugar onde o
+ps1), é o que mantém a config do usuário fora do `src/` e no lugar onde o
 `.gitignore` a protege. Mexeu na profundidade das pastas? Esses dois cálculos
 precisam acompanhar.
 
@@ -67,12 +67,12 @@ Cada uma tem um check de CI. Não remova sem entender o que ele protege.
 
 **O `fishell.ps1` precisa estar em UTF-8 com BOM.** O Windows PowerShell 5.1 lê
 `.ps1` sem BOM como ANSI, o que destrói o banner, as bordas do painel e as
-sentinelas do bloco no `~/.ssh/config` — fazendo cada `setup` duplicar o bloco.
+sentinelas do bloco no `~/.ssh/config`, fazendo cada `setup` duplicar o bloco.
 Toda ferramenta que reescreva o arquivo precisa preservar o BOM
 (`encoding='utf-8-sig'` em Python).
 
 **O painel é medido em colunas, não em bytes.** No bash, `printf '%-20s'`
-preenche por byte, e com `LC_ALL=C` até o `${#s}` conta bytes — "conexão"
+preenche por byte, e com `LC_ALL=C` até o `${#s}` conta bytes, "conexão"
 desalinharia a caixa. Use os helpers `vlen`/`pad`, nunca `%-Ns`, em qualquer
 coisa alinhada que possa ter acento. No PowerShell o `.PadRight()` já conta
 caracteres.
@@ -84,7 +84,7 @@ que fazia o `setup` nunca registrar o alias no Windows. Por isso o CI
 **executa** o port PowerShell.
 
 **A chave pública vai colada num formulário oficial.** O fishell **não gera**
-a chave — isso é um `ssh-keygen -t rsa`, no terminal, como manda a documentação
+a chave, isso é um `ssh-keygen -t rsa`, no terminal, como manda a documentação
 do NPAD. Mas ele *mostra* a pública para você copiar, e `validate_pubkey` /
 `Test-PubKey` conferem a integridade antes de imprimir: uma chave truncada
 cadastrada custa dias, porque o cadastro vai, o e-mail chega, e só na hora de
@@ -104,7 +104,7 @@ variável de ambiente > `config.sh`/`config.ps1` > `pt`. O ambiente é capturado
 *antes* de sourcear a config, justamente para poder vencer depois.
 
 Todas as strings de usuário ficam numa tabela única por idioma: `set_lang()`
-atribui `L_*` no bash, `Set-Lang` preenche o hashtable `$L` no ps1 — mesmas
+atribui `L_*` no bash, `Set-Lang` preenche o hashtable `$L` no ps1, mesmas
 chaves, mesma ordem nos dois arquivos. **String nova entra nas quatro tabelas**
 (pt/en × bash/ps1), e as do painel respeitam os limites de 20/16 colunas.
 
@@ -114,8 +114,8 @@ O público são alunos acessando o NPAD pela primeira vez. Foram removidos de
 propósito: `forget` (`ssh-keygen -R`), que era um botão de "ignorar aviso de
 segurança" para um caso raro; a animação, que poluía a saída no Colab; e
 `keygen`, porque gerar chave é um `ssh-keygen` de uma linha e não precisa de
-embrulho — o fishell só mostra a pública já existente. Não readicione opção ao painel sem uma
-razão de uso real — o custo é cognitivo, não de código.
+embrulho, o fishell só mostra a pública já existente. Não readicione opção ao painel sem uma
+razão de uso real, o custo é cognitivo, não de código.
 
 ## Screenshots
 
@@ -133,7 +133,7 @@ regras.
 ## Migrando de máquina
 
 Depois do `git clone`, copie da máquina antiga o `config.sh` e a pasta `.ssh/`
-inteira — os dois são gitignored de propósito. Ajuste as permissões, que o SSH
+inteira, os dois são gitignored de propósito. Ajuste as permissões, que o SSH
 recusa se estiverem frouxas:
 
 ```bash
