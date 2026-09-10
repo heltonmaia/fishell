@@ -43,6 +43,8 @@ confirmação.
 ```bash
 git clone https://github.com/heltonmaia/fishell.git
 cd fishell
+chmod +x bin/fishell.sh src/bash/fishell.sh    # se o clone não trouxe a permissão
+
 ./bin/fishell.sh keygen        # gera .ssh/id_rsa e .ssh/id_rsa.pub e mostra a pública
 ```
 
@@ -80,6 +82,7 @@ supercomputador **da máquina que gerou o par de chaves**.
 ```bash
 git clone https://github.com/heltonmaia/fishell.git
 cd fishell
+chmod +x bin/fishell.sh src/bash/fishell.sh    # se o clone não trouxe a permissão
 
 # 1. Coloque suas chaves em ./.ssh/  (ou gere com ./bin/fishell.sh keygen)
 mkdir -p .ssh
@@ -139,6 +142,7 @@ cd /content/drive/MyDrive/SuaPasta          # onde você quer guardar o fishell
 git clone https://github.com/heltonmaia/fishell.git
 cd fishell
 
+chmod +x bin/fishell.sh src/bash/fishell.sh # costuma NÃO pegar no Drive — veja abaixo
 bash bin/fishell.sh keygen                  # gera a chave; cadastre a pública no NPAD
 
 nano config.sh                              # troque seu_usuario_aqui pelo seu login
@@ -146,8 +150,11 @@ bash bin/fishell.sh setup
 bash bin/fishell.sh                         # abre o painel
 ```
 
-Use **`bash bin/fishell.sh`**, não `./bin/fishell.sh`: o Drive é um mount FUSE
-e o bit de execução do git nem sempre sobrevive lá.
+Use **`bash bin/fishell.sh`**, não `./bin/fishell.sh`. O Drive é montado com
+permissão fixa (tudo `600`, sem bit de execução), então `./` dá
+`bad interpreter: Permission denied` — e o `chmod` ali muitas vezes é ignorado
+pelo próprio mount, não adianta insistir. Chamar pelo `bash` dispensa a
+permissão e funciona em qualquer caso.
 
 **Onde ficam as chaves.** Duas montagens funcionam:
 
@@ -397,6 +404,7 @@ Ou tudo pela linha de comando:
 | No Colab parou de funcionar | A VM reiniciou: rode `bash bin/fishell.sh setup` de novo |
 | No Colab: `./bin/fishell.sh: No such file or directory` | O `!cd` não persiste. Use `%cd fishell` (magic) e depois `!bash bin/fishell.sh ...` |
 | `destination path 'fishell' already exists` | Já existe um clone: `%cd fishell` + `!git pull`, ou apague com `!rm -rf fishell` |
+| `bad interpreter: Permission denied` | Falta o bit de execução: `chmod +x bin/fishell.sh src/bash/fishell.sh` |
 | `Permission denied` rodando de dentro do Drive | Chame por `bash bin/fishell.sh ...` — o bit de execução não sobrevive ao mount FUSE |
 | Job não roda / fica em fila | `squeue --start` para a previsão; `sinfo` para ver se a partição está ocupada |
 | Banner/painel com lixo no Windows | Use o Windows Terminal; e `src/powershell/fishell.ps1` precisa estar salvo em UTF-8 **com BOM** |
