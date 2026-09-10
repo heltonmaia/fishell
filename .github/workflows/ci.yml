@@ -23,6 +23,17 @@ jobs:
           FISHELL_LANG=en FISHELL_NOANIM=1 NO_COLOR=1 ./bin/fishell.sh help \
             | grep -q 'CONTROL PANEL'
 
+      # A 1a execucao sem config nao pode mandar "preencha NPAD_USER": nesse
+      # ponto o usuario ainda nao tem login do NPAD. Tem que ser um roteiro.
+      - name: primeira execução mostra o roteiro, não um beco sem saída
+        run: |
+          test ! -f config.sh
+          FISHELL_NOANIM=1 NO_COLOR=1 bash bin/fishell.sh > ob.txt 2>&1 || true
+          grep -q 'primeira execução' ob.txt
+          grep -q 'bash bin/fishell.sh keygen' ob.txt
+          grep -q 'npad.ufrn.br/npad/primeirospassos' ob.txt
+          rm -f ob.txt config.sh
+
       # keygen e' o passo 1 do README e roda ANTES de o aluno ter conta no
       # NPAD — nao pode exigir NPAD_USER preenchido, senao vira impasse.
       - name: keygen funciona em clone novo, sem conta configurada

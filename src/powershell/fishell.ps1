@@ -121,6 +121,11 @@ function Set-Lang {
             KEYGEN_FAIL='ssh-keygen failed'; KEY_CREATED='keypair created ->'
             APPEND_PUB='append this public key to'; THEN_SETUP="then run: bin\fishell.cmd setup"
             CFG_LATER='config.ps1 not filled in yet - going ahead just to create the key'
+            FIRSTRUN='first run - three steps and you are in:'
+            STEP_KEYGEN='create your ssh key'
+            STEP_REGISTER='register the public key (you get your login by e-mail)'
+            STEP_CONFIG='put that login in $NPAD_USER'
+            STEP_RERUN='then run again'; STEP_DONE='done'
             REGISTER_PUB='register this public key at npad.ufrn.br (Primeiros Passos):'
             THEN_CONFIG="then set `$NPAD_USER in config.ps1 and run: bin\fishell.cmd setup"
             STATUS_STEP='system readout'
@@ -176,6 +181,11 @@ function Set-Lang {
             KEYGEN_FAIL='o ssh-keygen falhou'; KEY_CREATED='par de chaves criado ->'
             APPEND_PUB='adicione esta chave pública em'; THEN_SETUP="depois rode: bin\fishell.cmd setup"
             CFG_LATER='config.ps1 ainda não preenchido - seguindo só para criar a chave'
+            FIRSTRUN='primeira execução - três passos e você está dentro:'
+            STEP_KEYGEN='gere sua chave ssh'
+            STEP_REGISTER='cadastre a chave pública (o login chega por e-mail)'
+            STEP_CONFIG='ponha esse login em $NPAD_USER'
+            STEP_RERUN='e rode de novo'; STEP_DONE='feito'
             REGISTER_PUB='cadastre esta chave pública em npad.ufrn.br (Primeiros Passos):'
             THEN_CONFIG="depois preencha `$NPAD_USER no config.ps1 e rode: bin\fishell.cmd setup"
             STATUS_STEP='configuração atual'
@@ -194,6 +204,33 @@ $script:SSH_ALIAS = 'npad'
 $script:SSH_KEYS_DIR = ''
 $script:SetupOk = $false
 
+# Roteiro de primeira execucao. Substitui o antigo "edite config.ps1 e defina
+# NPAD_USER", que era um beco sem saida: nesse ponto o usuario ainda nao TEM um
+# login do NPAD — ele so' existe depois de cadastrar a chave publica.
+function Show-Onboarding {
+    param([string]$Cfg)
+    if ((Get-Location).Path -eq $RepoRoot) { $Cfg = 'config.ps1' }
+    $keys = if ($script:SSH_KEYS_DIR) { $script:SSH_KEYS_DIR } else { Join-Path $RepoRoot '.ssh' }
+    $hasKey = Test-Path (Join-Path $keys 'id_rsa')
+
+    Write-Line ""
+    Write-Line "  ${GB}${B}$($L.FIRSTRUN)${R}"
+    Write-Line ""
+    if ($hasKey) {
+        Write-Line "  ${GB}v${R} $($L.STEP_KEYGEN) ${GD}($($L.STEP_DONE))${R}"
+    } else {
+        Write-Line "  ${YEL}1.${R} $($L.STEP_KEYGEN)"
+        Write-Line "     ${G}PS> bin\fishell.cmd keygen${R}"
+    }
+    Write-Line "  ${YEL}2.${R} $($L.STEP_REGISTER)"
+    Write-Line "     ${CYA}https://npad.ufrn.br/npad/primeirospassos${R}"
+    Write-Line "  ${YEL}3.${R} $($L.STEP_CONFIG)"
+    Write-Line "     ${G}PS> notepad $Cfg${R}"
+    Write-Line ""
+    Write-Line "  ${GD}$($L.STEP_RERUN):${R} ${G}PS> bin\fishell.cmd${R}"
+    Write-Line ""
+}
+
 # -Lenient: nao aborta se $NPAD_USER ainda nao estiver preenchido. Usado pelo
 # `keygen`, que roda ANTES de o usuario ter conta no NPAD — exigir NPAD_USER ali
 # seria um impasse, ja que a chave e' pre-requisito do cadastro que gera o
@@ -211,10 +248,7 @@ function Load-Config {
             if ($Lenient) {
                 Log-Info $L.CFG_LATER
             } else {
-                Log-Warn ($L.CFG_EDIT -f $cfg)
-                Write-Line ""
-                Write-Line "  ${G}PS>${R} notepad $cfg"
-                Write-Line ""
+                Show-Onboarding $cfg
                 exit 1
             }
         } else {
@@ -228,8 +262,7 @@ function Load-Config {
         if ($Lenient) {
             $NPAD_USER = 'fishell'   # só compõe o comentário da chave
         } else {
-            Log-Err $L.CFG_PLACEHOLDER
-            Log-Info "$($L.CFG_EDITPATH) $cfg"
+            Show-Onboarding $cfg
             exit 1
         }
     }

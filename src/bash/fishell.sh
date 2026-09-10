@@ -126,6 +126,12 @@ set_lang() {
         L_KEYGEN_FAIL="ssh-keygen failed"; L_KEY_CREATED="keypair created ->"
         L_APPEND_PUB="append this public key to"; L_THEN_SETUP="then run: ./bin/fishell.sh setup"
         L_CFG_LATER="config.sh not filled in yet — going ahead just to create the key"
+        L_FIRSTRUN="first run — three steps and you are in:"
+        L_STEP_KEYGEN="create your ssh key"
+        L_STEP_REGISTER="register the public key (you get your login by e-mail)"
+        L_STEP_CONFIG="put that login in NPAD_USER"
+        L_STEP_RERUN="then run again"
+        L_STEP_DONE="done"
         L_REGISTER_PUB="register this public key at npad.ufrn.br (Primeiros Passos):"
         L_THEN_CONFIG="then set NPAD_USER in config.sh and run: ./bin/fishell.sh setup"
         L_STATUS_STEP="system readout"
@@ -182,6 +188,12 @@ set_lang() {
         L_KEYGEN_FAIL="o ssh-keygen falhou"; L_KEY_CREATED="par de chaves criado ->"
         L_APPEND_PUB="adicione esta chave pública em"; L_THEN_SETUP="depois rode: ./bin/fishell.sh setup"
         L_CFG_LATER="config.sh ainda não preenchido — seguindo só para criar a chave"
+        L_FIRSTRUN="primeira execução — três passos e você está dentro:"
+        L_STEP_KEYGEN="gere sua chave ssh"
+        L_STEP_REGISTER="cadastre a chave pública (o login chega por e-mail)"
+        L_STEP_CONFIG="ponha esse login em NPAD_USER"
+        L_STEP_RERUN="e rode de novo"
+        L_STEP_DONE="feito"
         L_REGISTER_PUB="cadastre esta chave pública em npad.ufrn.br (Primeiros Passos):"
         L_THEN_CONFIG="depois preencha NPAD_USER no config.sh e rode: ./bin/fishell.sh setup"
         L_STATUS_STEP="configuração atual"
@@ -358,8 +370,7 @@ load_config() {
             if [[ "$lenient" == "lenient" ]]; then
                 log_info "$L_CFG_LATER"
             else
-                log_warn "$(printf "$L_CFG_EDIT" "$cfg")"
-                printf '\n  %b$%b nano %s\n\n' "$G" "$C_RESET" "$cfg"
+                show_onboarding "$cfg"
                 exit 1
             fi
         else
@@ -386,19 +397,50 @@ load_config() {
         if [[ "$lenient" == "lenient" ]]; then
             NPAD_USER="fishell"   # só compõe o comentário da chave
         else
-            log_err "$L_CFG_PLACEHOLDER"
-            log_info "$L_CFG_EDITPATH $cfg"
+            show_onboarding "$cfg"
             exit 1
         fi
     fi
 
-    if [[ -z "${SSH_KEYS_DIR:-}" ]]; then
-        if [[ -d "/content/drive/MyDrive/visaocomputacional/.ssh" ]]; then
-            SSH_KEYS_DIR="/content/drive/MyDrive/visaocomputacional/.ssh"
-        else
-            SSH_KEYS_DIR="$REPO_ROOT/.ssh"
-        fi
+    resolve_keys_dir
+}
+
+resolve_keys_dir() {
+    [[ -n "${SSH_KEYS_DIR:-}" ]] && return
+    if [[ -d "/content/drive/MyDrive/visaocomputacional/.ssh" ]]; then
+        SSH_KEYS_DIR="/content/drive/MyDrive/visaocomputacional/.ssh"
+    else
+        SSH_KEYS_DIR="$REPO_ROOT/.ssh"
     fi
+}
+
+# Roteiro de primeira execucao. Substitui o antigo "edite config.sh e defina
+# NPAD_USER", que era um beco sem saida: nesse ponto o usuario ainda nao TEM
+# um login do NPAD — ele so' existe depois de cadastrar a chave publica.
+show_onboarding() {
+    local cfg="$1"
+    # Na raiz do repo mostra so' "config.sh": o caminho absoluto do Colab e'
+    # enorme e nao cabe na linha.
+    [[ "$PWD" == "$REPO_ROOT" ]] && cfg="config.sh"
+    resolve_keys_dir
+    local has_key="" mark
+    [[ -f "$SSH_KEYS_DIR/id_rsa" ]] && has_key=1
+
+    printf '\n%b  %s%b\n\n' "$G_BRIGHT$C_BOLD" "$L_FIRSTRUN" "$C_RESET"
+
+    if [[ -n "$has_key" ]]; then
+        mark="$(printf '%b✓%b' "$G_BRIGHT" "$C_RESET")"
+        printf '  %s %s %b(%s)%b\n' "$mark" "$L_STEP_KEYGEN" "$G_DIM" "$L_STEP_DONE" "$C_RESET"
+    else
+        printf '  %b1.%b %s\n     %b$ bash bin/fishell.sh keygen%b\n' \
+            "$YEL" "$C_RESET" "$L_STEP_KEYGEN" "$G" "$C_RESET"
+    fi
+    printf '  %b2.%b %s\n     %bhttps://npad.ufrn.br/npad/primeirospassos%b\n' \
+        "$YEL" "$C_RESET" "$L_STEP_REGISTER" "$CYA" "$C_RESET"
+    printf '  %b3.%b %s\n     %b$ nano %s%b\n' \
+        "$YEL" "$C_RESET" "$L_STEP_CONFIG" "$G" "$cfg" "$C_RESET"
+    printf '\n  %b%s:%b %b$ bash bin/fishell.sh%b\n\n' \
+        "$G_DIM" "$L_STEP_RERUN" "$C_RESET" "$G" "$C_RESET"
 }
 
 # ─── Setup SSH ────────────────────────────────────────────────
