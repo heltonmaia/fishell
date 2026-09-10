@@ -6,6 +6,7 @@ so' pode ser enviada depois que a tela correspondente aparece.
 """
 import os
 import pty
+import re
 import select
 import subprocess
 import sys
@@ -77,13 +78,20 @@ with tempfile.TemporaryDirectory() as tmp:
     ])
 
 tudo = "\n".join(telas)
+# Nada de esperar um nome especifico na lista: a ordem depende da locale (no
+# runner os arquivos ocultos vem primeiro, aqui nao), entao "duas setas pra
+# baixo" cai em pastas diferentes. O que importa e' que o enter tenha DESCIDO
+# um nivel, e isso da' pra ver pelo caminho mostrado.
+pastas = re.findall(r"pasta:\s*(\S+)", tudo)
 problemas = []
 if "subir um" not in tudo:
     problemas.append("a entrada '..' nao aparece em tela nenhuma")
-if "config.sh.example" not in tudo:
-    problemas.append("o enter nao entrou na subpasta (esperava ver o conteudo dela)")
 if "setas movem" not in tudo:
     problemas.append("a linha de ajuda nao aparece")
+if len(pastas) < 2:
+    problemas.append(f"esperava ver o caminho mudar; vi {pastas}")
+elif not pastas[-1].startswith(pastas[0].rstrip("/") + "/"):
+    problemas.append(f"o enter nao entrou numa subpasta: {pastas[0]} -> {pastas[-1]}")
 if problemas:
     print("\n".join(problemas))
     print("--- ultima tela ---")
