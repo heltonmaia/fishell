@@ -589,6 +589,18 @@ show_status() {
     _st "$L_ST_PORT"    "$NPAD_PORT"
     _st "$L_ST_ALIAS"   "$SSH_ALIAS"
     _st "$L_ST_KEYS"    "$SSH_KEYS_DIR"
+    # Dizer so' ONDE procura nao ajuda: o que trava o aluno e' nao saber se os
+    # arquivos estao la'. Mostra o inventario da pasta.
+    local f mark inv=""
+    for f in id_rsa id_rsa.pub known_hosts; do
+        if [[ -f "$SSH_KEYS_DIR/$f" ]]; then
+            mark="$(printf '%b✓%b' "$G_BRIGHT" "$C_RESET")"
+        else
+            mark="$(printf '%b✗%b' "$RED" "$C_RESET")"
+        fi
+        inv+="$mark $f   "
+    done
+    printf '  %s%s\n' "$(pad 10 "")" "$inv"
     _st "$L_ST_VERSION" "fishell v$FISHELL_VERSION"
     hline 50 ─
 }

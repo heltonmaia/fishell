@@ -533,6 +533,14 @@ function Show-Status {
         @($L.ST_VERSION, "fishell v$FishellVersion"))) {
         Write-Line ("  ${GB}" + $row[0].PadRight(10) + "${R} " + $row[1])
     }
+    # Dizer só ONDE procura não ajuda: o que trava o usuário é não saber se os
+    # arquivos estão lá. Mostra o inventário da pasta.
+    $inv = ''
+    foreach ($f in @('id_rsa', 'id_rsa.pub', 'known_hosts')) {
+        $mark = if (Test-Path (Join-Path $script:SSH_KEYS_DIR $f)) { "${GB}v${R}" } else { "${RED}x${R}" }
+        $inv += "$mark $f   "
+    }
+    Write-Line ("  " + (' ' * 10) + " $inv")
     Write-Line "${GD}$line${R}"
 }
 
