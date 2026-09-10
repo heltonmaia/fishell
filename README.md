@@ -54,8 +54,14 @@ dê enter em todas as perguntas:
 
 ```bash
 mkdir -p .ssh
-ssh-keygen -t rsa -f .ssh/id_rsa
+ssh-keygen -t rsa -f .ssh/id_rsa -C "seu-nome@colab"
 ```
+
+O `-f .ssh/id_rsa` guarda a chave **dentro da pasta do fishell**, e não no
+`~/.ssh` da máquina. No Colab isso é o que importa: o `~/.ssh` da VM é
+descartado a cada reinício, enquanto o repo está no Drive e persiste. O `-C` é
+opcional e serve só para você reconhecer a chave depois, na sua lista do NPAD —
+sem ele o comentário vira algo como `root@366ea8542bb9`.
 
 Rode o fishell de novo: ele mostra sua chave **pública**. Copie e cadastre em
 **[npad.ufrn.br → Primeiros Passos](https://npad.ufrn.br/npad/primeirospassos)**.
