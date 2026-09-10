@@ -46,6 +46,17 @@ cd fishell
 ./bin/fishell.sh keygen        # gera .ssh/id_rsa e .ssh/id_rsa.pub e mostra a pública
 ```
 
+> **No Google Colab é diferente** — duas armadilhas do notebook:
+> `!cd` **não persiste** (cada linha `!` roda num subshell próprio, então use
+> `%cd`, que é magic do notebook), e o bit de execução não sobrevive ao mount
+> do Drive (então chame por `bash`, não `./`):
+>
+> ```python
+> !git clone https://github.com/heltonmaia/fishell.git
+> %cd fishell
+> !bash bin/fishell.sh keygen
+> ```
+
 Ou, sem o fishell, o comando da documentação oficial: `ssh-keygen -t rsa`
 (dê enter em todas as perguntas), e depois `cat ~/.ssh/id_rsa.pub`.
 
@@ -354,6 +365,9 @@ Ou tudo pela linha de comando:
 | Timeout / conexão trava | `./bin/fishell.sh test`; se falhar, verifique firewall e a porta 4422 |
 | Alias `npad` não foi registrado | Já existia um `Host npad` seu no `~/.ssh/config` — veja a seção 4 |
 | No Colab parou de funcionar | A VM reiniciou: rode `bash bin/fishell.sh setup` de novo |
+| No Colab: `./bin/fishell.sh: No such file or directory` | O `!cd` não persiste. Use `%cd fishell` (magic) e depois `!bash bin/fishell.sh ...` |
+| `destination path 'fishell' already exists` | Já existe um clone: `%cd fishell` + `!git pull`, ou apague com `!rm -rf fishell` |
+| `Permission denied` rodando de dentro do Drive | Chame por `bash bin/fishell.sh ...` — o bit de execução não sobrevive ao mount FUSE |
 | Job não roda / fica em fila | `squeue --start` para a previsão; `sinfo` para ver se a partição está ocupada |
 | Banner/painel com lixo no Windows | Use o Windows Terminal; e `src/powershell/fishell.ps1` precisa estar salvo em UTF-8 **com BOM** |
 

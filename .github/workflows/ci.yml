@@ -62,6 +62,14 @@ jobs:
 
       # Em pt o painel tem acento, e printf '%-20s' preenche por BYTE — por
       # isso as duas línguas precisam ser checadas, não só uma.
+      # No Colab o repo costuma ficar no Drive, um mount FUSE onde o bit de
+      # execução do git não sobrevive. O wrapper tem que continuar funcionando.
+      - name: funciona sem bit de execução (Drive/FUSE)
+        run: |
+          chmod 644 bin/fishell.sh src/bash/fishell.sh
+          FISHELL_NOANIM=1 NO_COLOR=1 bash bin/fishell.sh status | grep -q 'fishell v'
+          chmod 755 bin/fishell.sh src/bash/fishell.sh
+
       - name: painel mantém as 50 colunas em pt e en
         run: |
           for lang in pt en; do
