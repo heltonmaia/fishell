@@ -105,7 +105,7 @@ function Set-Lang {
             PROBE='probing target'; HANDSHAKE='dispatching handshake (10s timeout)...'
             TUNNEL_OK='tunnel established ::'; HANDSHAKE_FAIL='handshake failed:'
             HINT_KEY='your public key is not registered at NPAD yet, or $NPAD_USER is wrong'
-            HINT_HOSTKEY='the server host key changed - see the README'
+            HINT_HOSTKEY='missing known_hosts, or the server key changed - see the README'
             HINT_NET='no route to the server - firewall, or port 4422 blocked'
             HINT_DNS='could not resolve the host - check your connection'
             OPEN_SHELL='opening secure shell to'; EXIT_HINT="(type 'exit' to return to the control panel)"
@@ -163,7 +163,7 @@ function Set-Lang {
             PROBE='testando'; HANDSHAKE='enviando handshake (limite de 10s)...'
             TUNNEL_OK='conexão estabelecida ::'; HANDSHAKE_FAIL='falhou:'
             HINT_KEY='sua chave pública ainda não está cadastrada no NPAD, ou o $NPAD_USER está errado'
-            HINT_HOSTKEY='a host key do servidor mudou - veja o README'
+            HINT_HOSTKEY='falta o known_hosts, ou a chave do servidor mudou - veja o README'
             HINT_NET='sem rota até o servidor - firewall, ou porta 4422 bloqueada'
             HINT_DNS='não consegui resolver o host - confira sua conexão'
             OPEN_SHELL='abrindo shell em'; EXIT_HINT="(digite 'exit' para voltar ao painel)"

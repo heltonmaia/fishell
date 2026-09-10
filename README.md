@@ -247,10 +247,36 @@ Dá para consultar sem abrir shell nenhum:
 | `bad interpreter: Permission denied` | Falta permissão: `chmod +x bin/fishell.sh src/bash/fishell.sh` — ou, no Drive, use `bash bin/fishell.sh` |
 | Não acho a pasta `.ssh/` no painel do Colab | Ela é oculta: ligue o ícone de olho (*mostrar arquivos ocultos*) |
 | Conexão trava ou dá timeout | `./bin/fishell.sh test` mostra o erro do SSH e sugere a causa |
-| `Host key verification failed` | O servidor trocou de chave. Confirme com o NPAD e rode `ssh-keygen -R '[sc2.npad.ufrn.br]:4422'` |
+| `Host key verification failed` | Falta o `known_hosts`, ou o servidor trocou de chave — veja abaixo |
 | O alias `npad` não foi registrado | Você já tinha um `Host npad` no `~/.ssh/config`. Remova o seu, ou troque `SSH_ALIAS` no `config.sh` |
 | No Colab, parou depois de um tempo | A VM reiniciou: `bash bin/fishell.sh setup` |
 | Job fica parado na fila | `squeue --start` mostra a previsão; `sinfo` mostra se a partição está cheia |
+
+---
+
+### `known_hosts` ausente
+
+O `status` mostra `✗ known_hosts`? A conexão até funciona, mas o `test` falha:
+ele usa `BatchMode` e não pode confirmar a identidade do servidor
+interativamente. Gere o arquivo e **confira** o que veio:
+
+```bash
+ssh-keyscan -p 4422 sc2.npad.ufrn.br > .ssh/known_hosts 2>/dev/null
+ssh-keygen -lf .ssh/known_hosts
+```
+
+As fingerprints do NPAD devem ser estas:
+
+| tipo | fingerprint |
+| --- | --- |
+| ED25519 | `SHA256:Lfjr9sC3MnZJj/27hWtDsQF5wJ6rTU0j62T3qFxpUgM` |
+| RSA | `SHA256:mUQ9ZrO4/2PYJHKx2Jh/OwN8LbPzPkfbiqzNv84be1E` |
+| ECDSA | `SHA256:PAAyt3VUyhhmNyZBVuWQB3b4w5XRh8gDTiaD+2Q3ef8` |
+
+Conferir não é burocracia: o `ssh-keyscan` aceita qualquer chave que o servidor
+apresentar, sem validar nada. É a comparação com uma fonte conhecida que
+transforma isso em verificação. Se **não** baterem, não prossiga — pergunte ao
+`atendimento@npad.ufrn.br` antes.
 
 ---
 
