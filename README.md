@@ -1,244 +1,115 @@
 # fishell
 
-Terminal SSH para acesso rápido ao **NPAD/UFRN** — o supercomputador do IMD.
-Configura as chaves, registra o alias `npad` e abre um painel interativo, para
-você não precisar decorar `ssh -p4422 usuario@sc2.npad.ufrn.br` nem os
-comandos de `scp`.
+Acesso rápido ao **NPAD/UFRN**, o supercomputador do IMD. Gera sua chave SSH,
+configura o acesso e abre um painel para conectar, mandar e trazer arquivos —
+sem decorar `ssh -p4422 usuario@sc2.npad.ufrn.br`.
 
 [![ci](https://github.com/heltonmaia/fishell/actions/workflows/ci.yml/badge.svg)](https://github.com/heltonmaia/fishell/actions/workflows/ci.yml)
 
-- **Linux / macOS / WSL / Google Colab** → `./bin/fishell.sh` (Bash)
-- **Windows (PowerShell / cmd)** → `bin\fishell.cmd` (launcher do PowerShell)
-- Interface em **português** (padrão) ou **inglês**
-
 ![painel do fishell](docs/screenshot.png)
 
-> Este README é um **resumo prático** para começar a usar o NPAD. A
-> documentação oficial e completa está em [npad.ufrn.br](https://npad.ufrn.br)
-> e nos [Tutoriais do NPAD](https://github.com/NPAD-UFRN/Tutorials). Dúvidas
-> sobre a máquina: `atendimento@npad.ufrn.br`.
-
 ---
 
-## Sumário
+## Começando
 
-1. [Antes de tudo: conta no NPAD](#1-antes-de-tudo-conta-no-npad)
-2. [Instalação](#2-instalação)
-3. [O painel](#3-o-painel)
-4. [Comandos](#4-comandos)
-5. [Usando o NPAD: o essencial](#5-usando-o-npad-o-essencial)
-6. [Fluxo típico de um trabalho](#6-fluxo-típico-de-um-trabalho)
-7. [Troubleshooting](#7-troubleshooting)
+São três passos, e o próprio fishell te guia por eles.
 
----
+### 1. Instale e rode
 
-## 1. Antes de tudo: conta no NPAD
-
-O NPAD só aceita login **por chave SSH** — não existe senha. A ordem é:
-gerar o par de chaves → cadastrar a chave **pública** → esperar o e-mail de
-confirmação.
-
-**1. Gere um par de chaves RSA.** O NPAD exige o tipo `rsa`.
+**Google Colab** — use o **Terminal** (ícone no canto inferior esquerdo), não
+células. Monte o Drive antes, numa célula:
+`from google.colab import drive; drive.mount('/content/drive')`
 
 ```bash
+cd /content/drive/MyDrive/SuaPasta
 git clone https://github.com/heltonmaia/fishell.git
 cd fishell
-chmod +x bin/fishell.sh src/bash/fishell.sh    # se o clone não trouxe a permissão
-
-./bin/fishell.sh keygen        # gera .ssh/id_rsa e .ssh/id_rsa.pub e mostra a pública
+bash bin/fishell.sh
 ```
 
-> **No Google Colab**, faça isso pelo **Terminal** (ícone no canto inferior
-> esquerdo) e não por células — lá os comandos acima funcionam como estão,
-> trocando `./bin/fishell.sh` por `bash bin/fishell.sh`. Veja
-> [Google Colab](#google-colab) abaixo.
-
-O `keygen` é o único comando que roda **sem** `config.sh` preenchido — de
-propósito: você ainda não tem usuário do NPAD neste ponto, e a chave é
-justamente o pré-requisito do cadastro que vai criar esse usuário.
-
-Na prática você nem precisa lembrar dele: rodando `bash bin/fishell.sh` num
-clone novo, o fishell gera a chave sozinho e mostra os passos que faltam.
-
-Ou, sem o fishell, o comando da documentação oficial: `ssh-keygen -t rsa`
-(dê enter em todas as perguntas), e depois `cat ~/.ssh/id_rsa.pub`.
-
-**2. Cadastre-se** em [Primeiros Passos](https://npad.ufrn.br/npad/primeirospassos),
-colando a chave **pública** (`id_rsa.pub`) no formulário. Confira antes o seu
-enquadramento na Política de Acesso para saber o tipo de usuário.
-
-**3. Espere o e-mail** de confirmação. A partir daí você acessa o
-supercomputador **da máquina que gerou o par de chaves**.
-
-> A chave **privada** (`id_rsa`, sem `.pub`) nunca sai do seu computador e
-> nunca vai para o formulário, para o Git ou para o WhatsApp.
-
----
-
-## 2. Instalação
-
-### Linux / macOS / WSL / Colab
+**Linux · macOS · WSL**
 
 ```bash
 git clone https://github.com/heltonmaia/fishell.git
 cd fishell
-chmod +x bin/fishell.sh src/bash/fishell.sh    # se o clone não trouxe a permissão
-
-# 1. Coloque suas chaves em ./.ssh/  (ou gere com ./bin/fishell.sh keygen)
-mkdir -p .ssh
-cp ~/.ssh/id_rsa ~/.ssh/id_rsa.pub .ssh/
-
-# 2. Diga qual é o seu usuário do NPAD
-cp config/config.sh.example config.sh
-sed -i 's/seu_usuario_aqui/SEU_USER_NPAD/' config.sh
-
-# 3. Rode
+chmod +x bin/fishell.sh src/bash/fishell.sh
 ./bin/fishell.sh
 ```
 
-Na primeira execução ele detecta que o SSH não está configurado, faz o setup
-sozinho e abre o painel.
-
-### Windows
-
-Precisa do **OpenSSH Client** (já vem no Windows 10+; se faltar:
-`Settings → Apps → Optional features → OpenSSH Client`). O **Windows Terminal**
-é recomendado para as cores e a animação.
+**Windows** — precisa do OpenSSH Client (já vem no Windows 10+).
 
 ```powershell
 git clone https://github.com/heltonmaia/fishell.git
 cd fishell
-
-mkdir .ssh
-copy $HOME\.ssh\id_rsa     .ssh\
-copy $HOME\.ssh\id_rsa.pub .ssh\
-
-Copy-Item config\config.ps1.example config.ps1
-notepad config.ps1          # edite $NPAD_USER
-
-.\bin\fishell.cmd           # o .cmd evita mexer na ExecutionPolicy
+.\bin\fishell.cmd
 ```
 
-### Google Colab
+> No Colab use sempre `bash bin/fishell.sh`, nunca `./bin/fishell.sh`: o Drive
+> é montado sem permissão de execução, e o `chmod` ali não adianta.
 
-O jeito mais simples é pelo **Terminal** do Colab, que é um shell de verdade —
-sem `!` e sem `%` na frente dos comandos.
+### 2. Cadastre a chave
 
-**1. Monte o Drive.** Numa célula do notebook (ou pelo botão *Montar Drive* no
-painel **Arquivos**):
+Na primeira execução o fishell gera sua chave e mostra a **pública**. Copie e
+cadastre em **[npad.ufrn.br → Primeiros Passos](https://npad.ufrn.br/npad/primeirospassos)**.
+O NPAD exige chave do tipo RSA — é a que ele gera.
 
-```python
-from google.colab import drive
-drive.mount('/content/drive')
-```
+Seu login chega por e-mail depois da aprovação.
 
-**2. Abra o Terminal** — ícone no canto inferior esquerdo, ou
-*Tools → Terminal*.
+> A chave **privada** (`.ssh/id_rsa`, sem o `.pub`) nunca sai do seu
+> computador: não vai no formulário, no Git nem no WhatsApp.
 
-**3. No terminal, é shell normal:**
+### 3. Diga qual é o seu login
 
 ```bash
-cd /content/drive/MyDrive/SuaPasta          # onde você quer guardar o fishell
-git clone https://github.com/heltonmaia/fishell.git
-cd fishell
+nano config.sh          # troque seu_usuario_aqui pelo login que chegou
+```
 
-chmod +x bin/fishell.sh src/bash/fishell.sh # costuma NÃO pegar no Drive — veja abaixo
-bash bin/fishell.sh keygen                  # gera a chave; cadastre a pública no NPAD
+Rode de novo e o painel abre. Pronto.
 
-nano config.sh                              # troque seu_usuario_aqui pelo seu login
+No Colab, **repita o `setup` toda vez que a VM reiniciar** — o `~/.ssh` da
+máquina virtual é descartado junto com ela:
+
+```bash
 bash bin/fishell.sh setup
-bash bin/fishell.sh                         # abre o painel
-```
-
-Use **`bash bin/fishell.sh`**, não `./bin/fishell.sh`. O Drive é montado com
-permissão fixa (tudo `600`, sem bit de execução), então `./` dá
-`bad interpreter: Permission denied` — e o `chmod` ali muitas vezes é ignorado
-pelo próprio mount, não adianta insistir. Chamar pelo `bash` dispensa a
-permissão e funciona em qualquer caso.
-
-**Onde ficam as chaves.** Duas montagens funcionam:
-
-| | onde clonar | onde ficam as chaves | sobrevive ao restart da VM? |
-| --- | --- | --- | --- |
-| **repo no Drive** (mais simples) | `/content/drive/MyDrive/...` | `<repo>/.ssh/` | sim |
-| repo efêmero | `/content/fishell` | pasta do Drive, via `SSH_KEYS_DIR` no `config.sh` | sim, as chaves |
-
-De qualquer forma, **rode `bash bin/fishell.sh setup` toda vez que a VM do
-Colab reiniciar**: o `~/.ssh` da VM é descartado junto com ela, e é ele que o
-`ssh` consulta.
-
-> Se `SSH_KEYS_DIR` ficar vazio e existir
-> `/content/drive/MyDrive/visaocomputacional/.ssh`, o fishell usa essa pasta
-> automaticamente — é um atalho da turma de Visão Computacional, não uma
-> exigência.
-
-**Preferir células do notebook?** Funciona, mas atenção a duas armadilhas:
-`!cd` não persiste (cada `!` é um subshell — use `%cd`, que é magic do
-notebook), e vale o mesmo `bash` em vez de `./`:
-
-```python
-!git clone https://github.com/heltonmaia/fishell.git /content/fishell
-%cd /content/fishell
-!bash bin/fishell.sh keygen
-```
-
-Consultar a fila sem sair do notebook:
-
-```python
-!bash bin/fishell.sh run "squeue -u SEU_USER"
 ```
 
 ---
 
-## 3. O painel
+## O painel
 
-Rodar sem argumento abre o painel. Cada tecla é uma ação — não precisa dar
-ENTER.
+Cada tecla é uma ação — não precisa dar ENTER.
 
 | tecla | ação |
-| ----- | ------------------------------------------------------------ |
-| `1`   | abre o shell no NPAD (o mesmo que `ssh npad`)                 |
-| `2`   | testa a conexão — handshake de 10 s, sem abrir shell          |
-| `3`   | envia arquivo/pasta via `scp`                                 |
-| `4`   | baixa arquivo/pasta via `scp`                                 |
-| `5`   | roda **um** comando no NPAD e mostra a saída                  |
-| `6`   | refaz o setup do SSH (recopia chaves, reescreve o alias)      |
-| `7`   | mostra a configuração atual (usuário, host, porta, chaves)    |
-| `8`   | gera um par de chaves novo                                    |
-| `l`   | troca o idioma da interface (pt ⇄ en)                         |
-| `0` ou `q` | sai                                                      |
-
-### Idioma
-
-Padrão **pt**. Para mudar de forma permanente, edite `FISHELL_LANG` no
-`config.sh` (ou `config.ps1`); para uma execução só, use a variável de
-ambiente; durante a sessão, a tecla `[l]`.
-
-```bash
-FISHELL_LANG=en ./bin/fishell.sh
-```
-
-![panel in english](docs/screenshot-en.png)
+| --- | --- |
+| `1` | abre o shell no NPAD |
+| `2` | testa a conexão, sem abrir shell |
+| `3` | envia arquivo ou pasta |
+| `4` | baixa arquivo ou pasta |
+| `5` | roda **um** comando no NPAD e mostra a saída |
+| `6` | refaz a configuração do SSH |
+| `7` | mostra a configuração atual |
+| `8` | gera um par de chaves novo |
+| `l` | troca o idioma (pt ⇄ en) |
+| `0` | sai |
 
 ---
 
-## 4. Comandos
+## Comandos
+
+Tudo que está no painel também funciona direto na linha de comando:
 
 ```bash
-./bin/fishell.sh                    # painel interativo
-./bin/fishell.sh setup              # (re)configura o SSH
-./bin/fishell.sh login              # conecta (= ssh npad)
-./bin/fishell.sh test               # testa a conexão
-./bin/fishell.sh upload             # scp push (interativo)
-./bin/fishell.sh download           # scp pull (interativo)
-./bin/fishell.sh run "squeue"       # roda um comando no NPAD
-./bin/fishell.sh keygen             # gera um par de chaves novo
-./bin/fishell.sh status             # mostra a configuração
-./bin/fishell.sh help               # ajuda (funciona sem config.sh)
+./bin/fishell.sh                  # painel
+./bin/fishell.sh login            # conecta
+./bin/fishell.sh test             # testa a conexão
+./bin/fishell.sh upload           # envia (pergunta os caminhos)
+./bin/fishell.sh download         # baixa
+./bin/fishell.sh run "squeue"     # roda um comando no NPAD
+./bin/fishell.sh setup            # refaz a configuração do SSH
+./bin/fishell.sh help             # ajuda
 ```
 
-Depois do `setup`, o alias fica no seu `~/.ssh/config` e o SSH normal
-funciona de qualquer terminal, sem o fishell:
+Depois do `setup`, o SSH normal também funciona, de qualquer terminal:
 
 ```bash
 ssh npad
@@ -246,46 +117,25 @@ scp dados.zip npad:~/
 scp npad:~/resultado.h5 .
 ```
 
-### O que o `setup` faz no seu `~/.ssh`
-
-1. Copia `id_rsa` (e `id_rsa.pub` / `known_hosts`, se existirem) para
-   `~/.ssh/`, com permissão `600`.
-2. Acrescenta ao `~/.ssh/config` um bloco delimitado:
-
-```
-# ── fishell: begin ──
-Host npad
-    HostName sc2.npad.ufrn.br
-    Port 4422
-    User SEU_USER
-    IdentityFile ~/.ssh/id_rsa
-    ServerAliveInterval 60
-    ServerAliveCountMax 3
-# ── fishell: end ──
-```
-
-Rodar `setup` de novo **reescreve** esse bloco em vez de duplicá-lo. Se você
-já tinha um `Host npad` que não foi criado pelo fishell, ele **não mexe** e
-avisa — remova o seu à mão ou troque o `SSH_ALIAS` no `config.sh`.
+Para mudar o idioma de forma permanente, edite `FISHELL_LANG` no `config.sh`.
 
 ---
 
-## 5. Usando o NPAD: o essencial
+## Usando o NPAD
 
 ### Onde o seu programa roda
 
-O supercomputador tem dois lugares muito diferentes, e confundir os dois é o
-erro mais comum:
+Esta é a distinção que mais derruba quem está começando:
 
-| | **nó de login** (`service0`) | **nós de computação** |
+| | **nó de login** | **nós de computação** |
 | --- | --- | --- |
-| é onde você cai ao dar `ssh npad` | sim | não |
-| para quê | editar arquivo, compilar, **testar** | rodar de verdade |
+| é onde você cai ao conectar | sim | não |
+| serve para | editar, compilar, **testar** | rodar de verdade |
 | como executa | `./meuscript` | `sbatch meuscript` |
-| limite | ~30 min usando 1 core — e **bem menos** se usar mais CPUs; o processo é morto automaticamente | horas, conforme o `--time` do script |
+| limite | ~30 min com 1 core, e **bem menos** com mais CPUs — depois o processo é morto | horas, conforme o `--time` do script |
 
-**Nunca** deixe um treinamento rodando no nó de login: ele é derrubado, e você
-atrapalha todo mundo que está logado.
+**Nunca** deixe um treinamento no nó de login: ele é derrubado, e você atrapalha
+todo mundo que está logado.
 
 ### Submetendo um job
 
@@ -293,24 +143,18 @@ Um "script de job" é um shell script com diretivas `#SBATCH` no topo:
 
 ```bash
 #!/bin/bash
-#SBATCH --partition=amd-512     # em qual grupo de máquinas rodar
-#SBATCH --time=0-0:30           # tempo máximo, no formato dias-horas:minutos
+#SBATCH --partition=amd-512     # onde rodar
+#SBATCH --time=0-0:30           # tempo máximo (dias-horas:minutos)
 
 python treina.py
 ```
 
 ```bash
-sbatch meujob.sh
-# Submitted batch job 14518
+sbatch meujob.sh        # → Submitted batch job 14518
+cat slurm-14518.out     # a saída vai para este arquivo, não para a tela
 ```
 
-A saída **não** aparece na tela: vai para `slurm-14518.out`, no mesmo
-diretório. Veja com `cat slurm-14518.out`.
-
 ### Partições
-
-Partição é como o NPAD agrupa as máquinas. Você escolhe com
-`#SBATCH --partition=`:
 
 | partição | para quê |
 | --- | --- |
@@ -319,182 +163,71 @@ Partição é como o NPAD agrupa as máquinas. Você escolhe com
 | `gpu-8-v100` | 8 GPUs NVIDIA V100 |
 | `gpu-4-a100` | 4 GPUs NVIDIA A100 |
 
-A lista completa e atualizada está na página de
-[Hardware](https://npad.ufrn.br/npad/hardware) e no `sinfo`.
-
 ### Job com GPU
 
 ```bash
 #!/bin/bash
 #SBATCH --partition=gpu-4-a100
-#SBATCH --gpus-per-node=1       # quantas GPUs por nó
+#SBATCH --gpus-per-node=1
 #SBATCH --cpus-per-task=6
 #SBATCH --time=0-03:00
 
-source activate gpu             # ambiente conda com PyTorch para GPU
+conda activate gpu      # ambiente com PyTorch para GPU já instalado
 python treina.py
 ```
 
-O PyTorch com suporte a GPU já vem instalado no ambiente conda `gpu`
-(`conda activate gpu`). Por padrão o PyTorch usa **uma** GPU; para usar várias
-é preciso `DataParallel`/`DDP` no seu código.
+Por padrão o PyTorch usa **uma** GPU; para várias é preciso `DataParallel` ou
+`DDP` no seu código.
 
 ### Acompanhando a fila
 
 | comando | o que faz |
 | --- | --- |
-| `squeue` | mostra a fila inteira |
-| `squeue -u SEU_USER` | só os seus jobs |
+| `squeue -u SEU_LOGIN` | seus jobs |
 | `squeue --start` | estimativa de quando cada job começa |
-| `watch squeue` | atualiza a cada 2 s |
-| `sinfo` | estado das partições e nós |
+| `sinfo` | estado das partições |
 | `scancel 14518` | cancela um job seu |
 
 Dá para consultar sem abrir shell nenhum:
 
 ```bash
-./bin/fishell.sh run "squeue -u SEU_USER"
+./bin/fishell.sh run "squeue -u SEU_LOGIN"
 ```
 
-### Coisas que costumam pegar
-
-- **Não existe `sudo`.** Precisa de algo que exija root? Fale com o
-  `atendimento@npad.ufrn.br`.
-- Instale suas dependências Python em um **ambiente conda seu**, não no
-  sistema.
-- O tempo (`--time`) é um limite: se estourar, o job é morto. Mas pedir tempo
-  demais atrasa o agendamento — o Slurm encaixa jobs curtos mais cedo.
-
----
-
-## 6. Fluxo típico de um trabalho
-
-```bash
-./bin/fishell.sh                        # abre o painel
-
-# [3] enviar arquivos     →  ./meu_projeto   →  ~/
-# [1] abrir shell seguro  →  compila, edita, testa rápido
-#                            sbatch meujob.sh
-#     exit                →  volta ao painel
-# [5] executar comando    →  squeue -u SEU_USER
-# [4] baixar arquivos     →  ~/resultados    →  ./
-```
-
-Ou tudo pela linha de comando:
+### Um fluxo típico
 
 ```bash
 ./bin/fishell.sh upload                 # manda o projeto
 ./bin/fishell.sh run "cd meu_projeto && sbatch meujob.sh"
-./bin/fishell.sh run "squeue -u SEU_USER"
+./bin/fishell.sh run "squeue -u SEU_LOGIN"
 ./bin/fishell.sh download               # traz os resultados
 ```
 
+> Não existe `sudo` no NPAD. Precisa de algo com privilégio de administrador?
+> Fale com o `atendimento@npad.ufrn.br`.
+
 ---
 
-## 7. Troubleshooting
+## Problemas comuns
 
 | Problema | Solução |
 | --- | --- |
-| `Permission denied (publickey)` | Confira `NPAD_USER` no `config.sh` e se a chave **pública** foi cadastrada no NPAD |
-| `chave privada não encontrada` | `./bin/fishell.sh keygen`, ou aponte `SSH_KEYS_DIR` para a pasta certa |
-| `Host key verification failed` | O servidor trocou de chave. Confirme com o NPAD e então: `ssh-keygen -R '[sc2.npad.ufrn.br]:4422'` |
-| Timeout / conexão trava | `./bin/fishell.sh test`; se falhar, verifique firewall e a porta 4422 |
-| Alias `npad` não foi registrado | Já existia um `Host npad` seu no `~/.ssh/config` — veja a seção 4 |
-| No Colab parou de funcionar | A VM reiniciou: rode `bash bin/fishell.sh setup` de novo |
-| No Colab: `./bin/fishell.sh: No such file or directory` | O `!cd` não persiste. Use `%cd fishell` (magic) e depois `!bash bin/fishell.sh ...` |
-| `destination path 'fishell' already exists` | Já existe um clone: `%cd fishell` + `!git pull`, ou apague com `!rm -rf fishell` |
-| `bad interpreter: Permission denied` | Falta o bit de execução: `chmod +x bin/fishell.sh src/bash/fishell.sh` |
-| `Permission denied` rodando de dentro do Drive | Chame por `bash bin/fishell.sh ...` — o bit de execução não sobrevive ao mount FUSE |
-| Job não roda / fica em fila | `squeue --start` para a previsão; `sinfo` para ver se a partição está ocupada |
-| Banner/painel com lixo no Windows | Use o Windows Terminal; e `src/powershell/fishell.ps1` precisa estar salvo em UTF-8 **com BOM** |
+| `Permission denied (publickey)` | Confira o login no `config.sh` e se a chave **pública** foi cadastrada |
+| `bad interpreter: Permission denied` | Falta permissão: `chmod +x bin/fishell.sh src/bash/fishell.sh` — ou, no Drive, use `bash bin/fishell.sh` |
+| Conexão trava ou dá timeout | `./bin/fishell.sh test`; se falhar, verifique firewall e a porta 4422 |
+| `Host key verification failed` | O servidor trocou de chave. Confirme com o NPAD e rode `ssh-keygen -R '[sc2.npad.ufrn.br]:4422'` |
+| O alias `npad` não foi registrado | Você já tinha um `Host npad` no `~/.ssh/config`. Remova o seu, ou troque `SSH_ALIAS` no `config.sh` |
+| No Colab, parou depois de um tempo | A VM reiniciou: `bash bin/fishell.sh setup` |
+| Job fica parado na fila | `squeue --start` mostra a previsão; `sinfo` mostra se a partição está cheia |
 
 ---
 
-## Estrutura
+## Links
 
-```
-bin/                     entrypoints
-  fishell.sh               Linux / macOS / WSL / Colab
-  fishell.cmd              Windows
-src/
-  bash/fishell.sh          o programa, versão Bash
-  powershell/fishell.ps1   o programa, versão PowerShell
-config/                  templates (os *.example commitados)
-docs/                    screenshots
-tools/make-screenshot.py regenera o print do README a partir da UI real
-```
+- Documentação oficial do NPAD: [npad.ufrn.br](https://npad.ufrn.br) · [tutoriais completos](https://github.com/NPAD-UFRN/Tutorials)
+- Cadastro e adição de chave: [Primeiros Passos](https://npad.ufrn.br/npad/primeirospassos) · [Adição de Chave](https://npad.ufrn.br/npad/chave)
+- Suporte do NPAD: `atendimento@npad.ufrn.br`
+- Contribuir ou entender o código: [docs/desenvolvimento.md](docs/desenvolvimento.md)
 
-`config.sh` / `config.ps1` (a sua config) e `.ssh/` (as suas chaves) ficam na
-**raiz** do repo, bloqueados pelo `.gitignore`.
-
-### Migrando para outra máquina
-
-Depois do `git clone`, copie da máquina antiga o `config.sh` e a pasta `.ssh/`
-inteira — os dois são gitignored de propósito. Na máquina nova, ajuste as
-permissões (o SSH recusa a chave se estiverem frouxas):
-
-```bash
-cd ~/fishell
-chmod 700 .ssh
-chmod 600 .ssh/id_rsa .ssh/known_hosts
-chmod 644 .ssh/id_rsa.pub
-chmod +x bin/fishell.sh src/bash/fishell.sh
-./bin/fishell.sh
-```
-
----
-
-## Desenvolvimento
-
-Não há build nem dependências. Os dois ports (`src/bash/fishell.sh` e
-`src/powershell/fishell.ps1`) são escritos à mão em paralelo: **toda mudança de
-comportamento, texto de UI ou subcomando precisa entrar nos dois**, incluindo o
-número de versão.
-
-```bash
-bash -n src/bash/fishell.sh bin/fishell.sh          # sintaxe
-shellcheck src/bash/fishell.sh bin/fishell.sh       # se disponível
-
-FISHELL_LANG=pt NO_COLOR=1 ./bin/fishell.sh </dev/null \
-  | python3 .github/scripts/check_panel.py          # a caixa tem 50 colunas
-
-python3 tools/make-screenshot.py                    # regenera o print do README
-```
-
-O CI roda isso nas duas línguas, mais o parser do PowerShell, o
-PSScriptAnalyzer e checks de paridade entre os ports.
-
-Dois detalhes que já causaram bug e estão protegidos por check:
-
-- **`src/powershell/fishell.ps1` precisa continuar em UTF-8 com BOM.** O
-  Windows PowerShell 5.1 lê `.ps1` sem BOM como ANSI, o que destrói o banner,
-  as bordas do painel e as sentinelas do bloco no `~/.ssh/config`.
-- **O painel é medido em colunas, não em bytes.** `printf '%-20s'` preenche por
-  byte, então "conexão" desalinharia a caixa — daí o helper `pad`/`vlen`.
-
----
-
-## Segurança
-
-`.ssh/`, `config.sh`, `config.ps1`, `*.zip`, `*.pem`, `*.key` estão no
-`.gitignore` — nunca serão commitados. Se suspeitar que sua chave privada
-vazou, gere um par novo com `./bin/fishell.sh keygen` e cadastre a nova chave
-pública no NPAD.
-
----
-
-## Links oficiais do NPAD
-
-- Portal: [npad.ufrn.br](https://npad.ufrn.br)
-- Primeiros Passos e cadastro: [npad.ufrn.br/npad/primeirospassos](https://npad.ufrn.br/npad/primeirospassos)
-- Tutoriais completos: [github.com/NPAD-UFRN/Tutorials](https://github.com/NPAD-UFRN/Tutorials)
-- Hardware e partições: [npad.ufrn.br/npad/hardware](https://npad.ufrn.br/npad/hardware)
-- Suporte: `atendimento@npad.ufrn.br`
-
-## Licença
-
-[MIT](LICENSE).
-
----
-
-Mantido por **Helton Maia** · `helton.maia@ufrn.br` · [heltonmaia.com](https://heltonmaia.com)
+Licença [MIT](LICENSE) · Mantido por **Helton Maia** ·
+[heltonmaia.com](https://heltonmaia.com)
