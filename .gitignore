@@ -1,5 +1,10 @@
 # ===== SSH keys & secrets (NEVER commit) =====
-.ssh/
+# `.ssh/*` e nao `.ssh/`: com a pasta inteira excluida o git ignora tambem a
+# negacao abaixo, e a pasta (que vem vazia no clone) nao existiria. O conteudo
+# segue bloqueado, e as regras de id_rsa/*.pem/*.key abaixo sao a segunda
+# barreira caso alguem mexa aqui.
+.ssh/*
+!.ssh/.gitkeep
 ssh/
 **/id_rsa
 **/id_rsa.*

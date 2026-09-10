@@ -276,6 +276,11 @@ function Load-Config {
         if (Test-Path $example) {
             Log-Info $L.CFG_COPY
             Copy-Item $example $cfg
+            # Dot-source o que acabou de ser copiado: sem isso o roteiro da 1a
+            # execucao usaria o fallback e mostraria um passo diferente do da
+            # 2a, quando o mesmo config ja' existe.
+            . $cfg
+            if ($SSH_KEYS_DIR) { $script:SSH_KEYS_DIR = $SSH_KEYS_DIR }
             Show-Onboarding $cfg
             exit 1
         } else {

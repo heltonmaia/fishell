@@ -155,11 +155,19 @@ Copy-Item config\config.ps1.example config.ps1
 
 ### Onde estão suas chaves
 
-**No PC, nada a fazer.** A chave que você gerou na parte 1 está em `~/.ssh`, e
-o fishell usa ela de lá. Não copia nem gera outra.
+O clone traz uma pasta `.ssh/` vazia, e é ela que o `config.sh` usa por
+padrão. Copie para lá a chave da parte 1:
 
-**No Colab, aponte para o Drive.** O `~/.ssh` fica na VM e some no reinício.
-Ponha as chaves numa pasta do Drive e diga onde, no `config.sh`:
+```bash
+cp ~/.ssh/id_rsa ~/.ssh/id_rsa.pub .ssh/
+```
+
+Prefere apontar em vez de copiar? O `config.sh` traz as alternativas
+comentadas: `$HOME/.ssh` (onde o `ssh-keygen` salva por padrão) ou um caminho
+completo qualquer.
+
+**No Colab, use um caminho no Drive.** O `~/.ssh` fica na VM e some no
+reinício, então as chaves precisam estar fora dela:
 
 ```bash
 SSH_KEYS_DIR="/content/drive/MyDrive/SuaPasta/.ssh"

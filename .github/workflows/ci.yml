@@ -13,6 +13,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # A pasta de chaves vem no clone (via .gitkeep) para o usuario ter onde
+      # colocar as chaves sem criar nada. O .gitignore tem que continuar
+      # barrando tudo que for chave dentro dela.
+      - name: .ssh/ vem no clone, vazia e protegida
+        run: |
+          test -d .ssh
+          test ! -f .ssh/id_rsa
+          for f in id_rsa id_rsa.pub known_hosts x.pem x.key; do
+            git check-ignore -q ".ssh/$f" || { echo "NAO ignorado: .ssh/$f"; exit 1; }
+          done
+          test "$(git ls-files .ssh/)" = ".ssh/.gitkeep"
+          echo "ok"
+
       - name: sintaxe (bash -n)
         run: bash -n src/bash/fishell.sh
 
@@ -34,7 +47,8 @@ jobs:
           grep -q 'ssh-keygen -t rsa' ob.txt
           grep -q 'npad.ufrn.br/npad/primeirospassos' ob.txt
           test ! -f .ssh/id_rsa   # nao gera chave nenhuma
-          rm -rf .ssh ob.txt config.sh
+          test -d .ssh            # mas a pasta vem no clone
+          rm -f ob.txt config.sh
 
       - name: com chave existente, mostra a pública para cadastrar
         run: |
@@ -69,7 +83,6 @@ jobs:
           sed -i "s|^SSH_KEYS_DIR=.*|SSH_KEYS_DIR=\"$alt\"|" config.sh
           NO_COLOR=1 bash bin/fishell.sh > ob.txt 2>&1 || true
           grep -qF "$alt" ob.txt              # o roteiro cita o caminho real
-          test ! -d .ssh
           rm -rf ob.txt config.sh "$RUNNER_TEMP/chaves-alternativas"
 
       # Depois da parte 1 a chave esta' em ~/.ssh, que e' onde o ssh procura.

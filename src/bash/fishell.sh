@@ -305,6 +305,11 @@ load_config() {
         if [[ -f "$example" ]]; then
             log_info "$L_CFG_COPY"
             cp "$example" "$cfg"
+            # Sourceia o que acabou de ser copiado: sem isso o roteiro da 1a
+            # execucao usaria o fallback e mostraria um passo diferente do da
+            # 2a, quando o mesmo config ja' existe.
+            # shellcheck source=/dev/null
+            source "$cfg"
             show_onboarding "$cfg"
             exit 1
         else

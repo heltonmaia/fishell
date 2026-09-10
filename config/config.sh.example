@@ -19,17 +19,25 @@ NPAD_PORT="4422"
 
 # Pasta onde estão as chaves SSH (id_rsa, id_rsa.pub, known_hosts).
 #
-# Vazio = a pasta `.ssh` na RAIZ do repositório fishell, ou seja ao lado deste
-# `config.sh`. Note que NÃO é o diretório de onde você chamou o script.
+# Padrão: a pasta `.ssh` do próprio fishell, que já vem no clone, vazia.
+# Copie suas chaves para lá, ou troque o caminho abaixo.
+SSH_KEYS_DIR="$REPO_ROOT/.ssh"
+
+# Alternativas, use no lugar da linha acima:
 #
-# Preencha se as chaves estiverem em outro lugar. No Colab costuma valer a pena
-# guardá-las fora do repo, assim elas sobrevivem a um clone novo:
+#   SSH_KEYS_DIR="$HOME/.ssh"
+#       Onde o ssh-keygen salva por padrão no Linux e no macOS. Use se sua
+#       chave já está lá e você não quer uma segunda cópia.
 #
-#   SSH_KEYS_DIR="/content/drive/MyDrive/Classes/2026.2_DL/npad/.ssh"
+#   SSH_KEYS_DIR="/content/drive/MyDrive/SuaPasta/.ssh"
+#       Caminho completo, qualquer lugar. No Colab é o que faz a chave
+#       sobreviver ao reinício da VM, já que o ~/.ssh de lá é descartado.
 #
-# (Se ficar vazio e existir /content/drive/MyDrive/visaocomputacional/.ssh, essa
-# pasta é usada, atalho antigo da turma de Visão Computacional.)
-SSH_KEYS_DIR=""
+#   SSH_KEYS_DIR=""
+#       Deixa o fishell procurar sozinho: .ssh do repo, depois ~/.ssh.
+#
+# Mudou este caminho? Rode `./bin/fishell.sh setup` de novo: é ele quem
+# instala as chaves no ~/.ssh, que é onde o ssh vai procurar.
 
 # Alias SSH usado no comando `ssh <alias>` (padrão: npad)
 SSH_ALIAS="npad"

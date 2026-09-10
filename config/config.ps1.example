@@ -17,10 +17,18 @@ $NPAD_PORT = '4422'
 
 # Pasta onde estão as chaves SSH (id_rsa, id_rsa.pub, known_hosts).
 #
-# Vazio = a pasta `.ssh` na RAIZ do repositório fishell, ou seja ao lado deste
-# `config.ps1`. Note que NÃO é o diretório de onde você chamou o script.
-# Preencha se as chaves estiverem em outro lugar.
-$SSH_KEYS_DIR = ''
+# Padrão: a pasta `.ssh` do próprio fishell, que já vem no clone, vazia.
+# Copie suas chaves para lá, ou troque o caminho abaixo.
+$SSH_KEYS_DIR = "$RepoRoot\.ssh"
+
+# Alternativas, use no lugar da linha acima:
+#
+#   $SSH_KEYS_DIR = "$HOME\.ssh"    # onde o ssh-keygen salva por padrão
+#   $SSH_KEYS_DIR = 'D:\chaves\.ssh'  # caminho completo, qualquer lugar
+#   $SSH_KEYS_DIR = ''              # deixa o fishell procurar sozinho
+#
+# Mudou este caminho? Rode `bin\fishell.cmd setup` de novo: é ele quem
+# instala as chaves no ~/.ssh, que é onde o ssh vai procurar.
 
 # Alias SSH usado no comando `ssh <alias>` (padrão: npad)
 $SSH_ALIAS = 'npad'
