@@ -24,6 +24,7 @@ células. Monte o Drive antes, numa célula:
 cd /content/drive/MyDrive/SuaPasta
 git clone https://github.com/heltonmaia/fishell.git
 cd fishell
+cp config/config.sh.example config.sh
 bash bin/fishell.sh
 ```
 
@@ -33,6 +34,7 @@ bash bin/fishell.sh
 git clone https://github.com/heltonmaia/fishell.git
 cd fishell
 chmod +x bin/fishell.sh src/bash/fishell.sh
+cp config/config.sh.example config.sh
 ./bin/fishell.sh
 ```
 
@@ -41,11 +43,22 @@ chmod +x bin/fishell.sh src/bash/fishell.sh
 ```powershell
 git clone https://github.com/heltonmaia/fishell.git
 cd fishell
+Copy-Item config\config.ps1.example config.ps1
 .\bin\fishell.cmd
 ```
 
 > No Colab use sempre `bash bin/fishell.sh`, nunca `./bin/fishell.sh`: o Drive
 > é montado sem permissão de execução, e o `chmod` ali não adianta.
+
+O `config.sh` é a **sua** configuração e o `.ssh/` são as **suas** chaves —
+nenhum dos dois é versionado, de propósito, para o seu login e sua chave
+privada nunca irem parar num commit. A consequência: apagar e clonar o repo de
+novo leva os dois junto. Se isso te preocupa, guarde as chaves **fora** da
+pasta do fishell e aponte para elas:
+
+```bash
+SSH_KEYS_DIR="/content/drive/MyDrive/SuaPasta/.ssh"   # no config.sh
+```
 
 ### 2. Gere e cadastre sua chave
 
