@@ -110,8 +110,13 @@ function Set-Lang {
             HINT_NET='no route to the server - firewall, or port 4422 blocked'
             HINT_DNS='could not resolve the host - check your connection'
             OPEN_SHELL='opening secure shell to'; EXIT_HINT="(type 'exit' to return to the control panel)"
-            UPLOAD_STEP='upload // local -> npad'; DOWNLOAD_STEP='download // npad -> local'
-            LOCAL_PATH='local path'; REMOTE_PATH='remote path'
+            UPLOAD_STEP='upload // from your computer to npad'
+            DOWNLOAD_STEP='download // from npad to your computer'
+            UPLOAD_EX='e.g.  ./my_project  ->  ~/'
+            DOWNLOAD_EX='e.g.  ~/result.h5  ->  .'
+            FROM_HERE='from (here)'; TO_NPAD='to (npad)'
+            FROM_NPAD='from (npad)'; TO_HERE='to (here)'
+            ACL_WARN='could not tighten the key permission; ssh may still warn'
             SRC_MISSING='does not exist'; TRANSFERRING='transferring...'
             TRANSFER_OK='transfer complete'; TRANSFER_FAIL='transfer failed'
             REMOTE_EXEC='remote exec //'; CMD='cmd'; EMPTY_CMD='empty command, aborted.'
@@ -169,8 +174,13 @@ function Set-Lang {
             HINT_NET='sem rota até o servidor - firewall, ou porta 4422 bloqueada'
             HINT_DNS='não consegui resolver o host - confira sua conexão'
             OPEN_SHELL='abrindo shell em'; EXIT_HINT="(digite 'exit' para voltar ao painel)"
-            UPLOAD_STEP='envio // local -> npad'; DOWNLOAD_STEP='download // npad -> local'
-            LOCAL_PATH='caminho local'; REMOTE_PATH='caminho remoto'
+            UPLOAD_STEP='envio // do seu computador para o npad'
+            DOWNLOAD_STEP='download // do npad para o seu computador'
+            UPLOAD_EX='ex.  ./meu_projeto  ->  ~/'
+            DOWNLOAD_EX='ex.  ~/resultado.h5  ->  .'
+            FROM_HERE='de   (aqui)'; TO_NPAD='para (npad)'
+            FROM_NPAD='de   (npad)'; TO_HERE='para (aqui)'
+            ACL_WARN='não consegui restringir a permissão da chave; o ssh pode reclamar'
             SRC_MISSING='não existe'; TRANSFERRING='transferindo...'
             TRANSFER_OK='transferência concluída'; TRANSFER_FAIL='a transferência falhou'
             REMOTE_EXEC='comando remoto //'; CMD='comando'; EMPTY_CMD='comando vazio, cancelado.'
@@ -472,7 +482,7 @@ function Restrict-KeyAcl {
         $user = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
         icacls $Path /inheritance:r /grant:r "${user}:(F)" | Out-Null
     } catch {
-        Log-Warn "could not tighten ACL on $Path (ssh may still warn)"
+        Log-Warn $L.ACL_WARN
     }
 }
 
@@ -520,8 +530,12 @@ function Prompt-Value {
 
 function Action-Upload {
     Log-Step $L.UPLOAD_STEP
-    $src = Prompt-Value -Label $L.LOCAL_PATH
-    $dst = Prompt-Value -Label $L.REMOTE_PATH -Default '~/'
+    Write-Line "  ${GD}$($L.UPLOAD_EX)${R}"
+    # Rotulos dizem o papel (de/para) E o lado (aqui/npad): so' "caminho
+    # local" e "caminho remoto" obriga o usuario a deduzir a direcao, e ela
+    # inverte entre enviar e baixar.
+    $src = Prompt-Value -Label $L.FROM_HERE
+    $dst = Prompt-Value -Label $L.TO_NPAD -Default '~/'
     if (-not (Test-Path $src)) { Log-Err "'$src' $($L.SRC_MISSING)"; return }
     Log-Work $L.TRANSFERRING
     & scp -P $script:NPAD_PORT -r $src "$($script:SSH_ALIAS):$dst"
@@ -530,11 +544,12 @@ function Action-Upload {
 
 function Action-Download {
     Log-Step $L.DOWNLOAD_STEP
-    $src = Prompt-Value -Label $L.REMOTE_PATH
-    $dst = Prompt-Value -Label $L.LOCAL_PATH -Default './'
-    Log-Work "transferring..."
+    Write-Line "  ${GD}$($L.DOWNLOAD_EX)${R}"
+    $src = Prompt-Value -Label $L.FROM_NPAD
+    $dst = Prompt-Value -Label $L.TO_HERE -Default './'
+    Log-Work $L.TRANSFERRING
     & scp -P $script:NPAD_PORT -r "$($script:SSH_ALIAS):$src" $dst
-    if ($LASTEXITCODE -eq 0) { Log-Ok "transfer complete" } else { Log-Err "transfer failed" }
+    if ($LASTEXITCODE -eq 0) { Log-Ok $L.TRANSFER_OK } else { Log-Err $L.TRANSFER_FAIL }
 }
 
 function Action-RunRemote {

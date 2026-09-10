@@ -117,8 +117,14 @@ set_lang() {
         L_HINT_NET="no route to the server: firewall, or port 4422 blocked"
         L_HINT_DNS="could not resolve the host, check your connection"
         L_OPEN_SHELL="opening secure shell to"; L_EXIT_HINT="(type 'exit' to return to the control panel)"
-        L_UPLOAD_STEP="upload // local -> npad"; L_DOWNLOAD_STEP="download // npad -> local"
-        L_LOCAL_PATH="local path"; L_REMOTE_PATH="remote path"
+        L_UPLOAD_STEP="upload // from your computer to npad"
+        L_DOWNLOAD_STEP="download // from npad to your computer"
+        L_UPLOAD_EX="e.g.  ./my_project  ->  ~/"
+        L_DOWNLOAD_EX="e.g.  ~/result.h5  ->  ."
+        L_FROM_HERE="from (here)"; L_TO_NPAD="to (npad)"
+        L_FROM_NPAD="from (npad)"; L_TO_HERE="to (here)"
+        # so' o ps1 usa: no bash o chmod nao falha
+        L_ACL_WARN="could not tighten the key permission; ssh may still warn"
         L_SRC_MISSING="does not exist"; L_TRANSFERRING="transferring..."
         L_TRANSFER_OK="transfer complete"; L_TRANSFER_FAIL="transfer failed"
         L_REMOTE_EXEC="remote exec //"; L_CMD="cmd"; L_EMPTY_CMD="empty command, aborted."
@@ -178,8 +184,13 @@ set_lang() {
         L_HINT_NET="sem rota até o servidor: firewall, ou porta 4422 bloqueada"
         L_HINT_DNS="não consegui resolver o host, confira sua conexão"
         L_OPEN_SHELL="abrindo shell em"; L_EXIT_HINT="(digite 'exit' para voltar ao painel)"
-        L_UPLOAD_STEP="envio // local -> npad"; L_DOWNLOAD_STEP="download // npad -> local"
-        L_LOCAL_PATH="caminho local"; L_REMOTE_PATH="caminho remoto"
+        L_UPLOAD_STEP="envio // do seu computador para o npad"
+        L_DOWNLOAD_STEP="download // do npad para o seu computador"
+        L_UPLOAD_EX="ex.  ./meu_projeto  ->  ~/"
+        L_DOWNLOAD_EX="ex.  ~/resultado.h5  ->  ."
+        L_FROM_HERE="de   (aqui)"; L_TO_NPAD="para (npad)"
+        L_FROM_NPAD="de   (npad)"; L_TO_HERE="para (aqui)"
+        L_ACL_WARN="não consegui restringir a permissão da chave; o ssh pode reclamar"
         L_SRC_MISSING="não existe"; L_TRANSFERRING="transferindo..."
         L_TRANSFER_OK="transferência concluída"; L_TRANSFER_FAIL="a transferência falhou"
         L_REMOTE_EXEC="comando remoto //"; L_CMD="comando"; L_EMPTY_CMD="comando vazio, cancelado."
@@ -547,10 +558,14 @@ action_login() {
 
 action_upload() {
     log_step "$L_UPLOAD_STEP"
+    printf '  %b%s%b\n' "$G_DIM" "$L_UPLOAD_EX" "$C_RESET"
     local src dst
-    printf '  %b>%b %s : ' "$G" "$C_RESET" "$L_LOCAL_PATH"
+    # Rotulos dizem o papel (de/para) E o lado (aqui/npad): so' "caminho
+    # local" e "caminho remoto" obriga o aluno a deduzir a direcao, e ela
+    # inverte entre enviar e baixar.
+    printf '  %b>%b %s : ' "$G" "$C_RESET" "$L_FROM_HERE"
     read -r src
-    printf '  %b>%b %s [~/] : ' "$G" "$C_RESET" "$L_REMOTE_PATH"
+    printf '  %b>%b %s [~/] : ' "$G" "$C_RESET" "$L_TO_NPAD"
     read -r dst
     [[ -z "$dst" ]] && dst="~/"
     if [[ ! -e "$src" ]]; then
@@ -565,16 +580,17 @@ action_upload() {
 
 action_download() {
     log_step "$L_DOWNLOAD_STEP"
+    printf '  %b%s%b\n' "$G_DIM" "$L_DOWNLOAD_EX" "$C_RESET"
     local src dst
-    printf '  %b>%b %s : ' "$G" "$C_RESET" "$L_REMOTE_PATH"
+    printf '  %b>%b %s : ' "$G" "$C_RESET" "$L_FROM_NPAD"
     read -r src
-    printf '  %b>%b %s [./] : ' "$G" "$C_RESET" "$L_LOCAL_PATH"
+    printf '  %b>%b %s [./] : ' "$G" "$C_RESET" "$L_TO_HERE"
     read -r dst
     [[ -z "$dst" ]] && dst="./"
     stty sane 2>/dev/null || true
-    log_work "transferring..."
+    log_work "$L_TRANSFERRING"
     scp -P "$NPAD_PORT" -r "${SSH_ALIAS}:${src}" "$dst" \
-        && log_ok "transfer complete" || log_err "transfer failed"
+        && log_ok "$L_TRANSFER_OK" || log_err "$L_TRANSFER_FAIL"
 }
 
 action_run_remote() {
