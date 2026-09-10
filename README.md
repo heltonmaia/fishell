@@ -24,11 +24,17 @@ O NPAD só aceita login por chave — não existe senha. E a chave precisa ser
 **RSA**. Dê enter em todas as perguntas:
 
 ```bash
-ssh-keygen -t rsa -C "seu-nome@sua-maquina"
+ssh-keygen -t rsa
 ```
 
 Isso cria `~/.ssh/id_rsa` (privada, nunca sai daí) e `~/.ssh/id_rsa.pub`
 (pública, é a que você cadastra).
+
+> A pública termina com um comentário, tipo `helton@notebook`. É texto livre —
+> o `ssh-keygen` preenche com `usuário@máquina` de onde você gerou. Ele não
+> tem efeito nenhum na autenticação; serve para você reconhecer a chave na sua
+> lista do NPAD. Se for cadastrar mais de uma, vale escolher um nome claro:
+> `ssh-keygen -t rsa -C "colab"`.
 
 ### Cadastre a pública
 
@@ -130,12 +136,16 @@ mkdir -p .ssh
 cp ~/.ssh/id_rsa ~/.ssh/id_rsa.pub .ssh/
 ```
 
-No Colab, se as chaves já estão no Drive em outro lugar, não copie — aponte,
-no `config.sh`:
+**Se você seguiu o caminho do Colab na parte 1**, sua chave já está no Drive e
+o `cp` acima não vai achar nada — o certo ali é não copiar, e sim apontar, no
+`config.sh`:
 
 ```bash
 SSH_KEYS_DIR="/content/drive/MyDrive/SuaPasta/.ssh"
 ```
+
+Vale para qualquer máquina, aliás: apontar em vez de copiar evita ter a mesma
+chave privada em dois lugares.
 
 ### Preencha seu login e rode
 
