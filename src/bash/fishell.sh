@@ -120,8 +120,8 @@ set_lang() {
         L_OPEN_SHELL="opening secure shell to"; L_EXIT_HINT="(type 'exit' to return to the control panel)"
         L_UPLOAD_STEP="upload // from your computer to npad"
         L_DOWNLOAD_STEP="download // from npad to your computer"
-        L_UPLOAD_EX="e.g.  ./my_project  ->  ~/"
-        L_DOWNLOAD_EX="e.g.  ~/result.h5  ->  ."
+        L_UPLOAD_EX="e.g.  ./my_project  ->  ~/      (Tab completes local paths)"
+        L_DOWNLOAD_EX="e.g.  ~/result.h5  ->  .      (Tab completes local paths)"
         L_FROM_HERE="from (here)"; L_TO_NPAD="to (npad)"
         L_FROM_NPAD="from (npad)"; L_TO_HERE="to (here)"
         # so' o ps1 usa: no bash o chmod nao falha
@@ -188,8 +188,8 @@ set_lang() {
         L_OPEN_SHELL="abrindo shell em"; L_EXIT_HINT="(digite 'exit' para voltar ao painel)"
         L_UPLOAD_STEP="envio // do seu computador para o npad"
         L_DOWNLOAD_STEP="download // do npad para o seu computador"
-        L_UPLOAD_EX="ex.  ./meu_projeto  ->  ~/"
-        L_DOWNLOAD_EX="ex.  ~/resultado.h5  ->  ."
+        L_UPLOAD_EX="ex.  ./meu_projeto  ->  ~/      (Tab completa caminhos locais)"
+        L_DOWNLOAD_EX="ex.  ~/resultado.h5  ->  .      (Tab completa caminhos locais)"
         L_FROM_HERE="de   (aqui)"; L_TO_NPAD="para (npad)"
         L_FROM_NPAD="de   (npad)"; L_TO_HERE="para (aqui)"
         L_ACL_WARN="não consegui restringir a permissão da chave; o ssh pode reclamar"
@@ -567,6 +567,24 @@ action_login() {
     ssh "$SSH_ALIAS"
 }
 
+# Lê um caminho LOCAL com completar de arquivo (Tab), via readline.
+# Os \001/\002 marcam as sequências não imprimíveis para o readline calcular
+# a largura do prompt; sem eles a linha se embaralha ao completar ou editar.
+# Só serve para o lado local: completar caminho daqui num destino remoto
+# induziria ao erro.
+read_local_path() {
+    local _var="$1" label="$2" default="${3:-}" p
+    if [[ ! -t 0 ]]; then
+        # shellcheck disable=SC2229  # atribuição indireta é intencional aqui
+        read -r "$_var"
+        return
+    fi
+    p=$(printf '  \001%s\002>\001%s\002 %s%s : ' \
+        "$G" "$C_RESET" "$label" "${default:+ [$default]}")
+    # shellcheck disable=SC2229
+    read -e -r -p "$p" "$_var"
+}
+
 action_upload() {
     log_step "$L_UPLOAD_STEP"
     printf '  %b%s%b\n' "$G_DIM" "$L_UPLOAD_EX" "$C_RESET"
@@ -574,8 +592,7 @@ action_upload() {
     # Rotulos dizem o papel (de/para) E o lado (aqui/npad): so' "caminho
     # local" e "caminho remoto" obriga o aluno a deduzir a direcao, e ela
     # inverte entre enviar e baixar.
-    printf '  %b>%b %s : ' "$G" "$C_RESET" "$L_FROM_HERE"
-    read -r src
+    read_local_path src "$L_FROM_HERE"
     printf '  %b>%b %s [~/] : ' "$G" "$C_RESET" "$L_TO_NPAD"
     read -r dst
     [[ -z "$dst" ]] && dst="~/"
@@ -595,8 +612,8 @@ action_download() {
     local src dst
     printf '  %b>%b %s : ' "$G" "$C_RESET" "$L_FROM_NPAD"
     read -r src
-    printf '  %b>%b %s [./] : ' "$G" "$C_RESET" "$L_TO_HERE"
-    read -r dst
+    read_local_path dst "$L_TO_HERE" "./"
+
     [[ -z "$dst" ]] && dst="./"
     stty sane 2>/dev/null || true
     log_work "$L_TRANSFERRING"

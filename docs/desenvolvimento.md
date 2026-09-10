@@ -97,6 +97,11 @@ de célula de notebook, e o banner sai três vezes.
 interpretador explicitamente em vez de dar `exec` no script, senão morre com
 `Permission denied` num mount FUSE mesmo quando invocado como `bash bin/...`.
 
+## Diferenças entre os ports que são deliberadas
+
+- **Completar caminho com Tab** só existe no bash (`read -e`, do readline). O
+  PowerShell precisaria do PSReadLine, que não está garantido num script solto.
+
 ## Idioma
 
 `FISHELL_LANG=pt|en`, padrão **pt**. Precedência: tecla `[l]` do menu >
