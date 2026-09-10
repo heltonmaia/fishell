@@ -68,6 +68,11 @@ Se você já tem conta e está só adicionando uma máquina, o formulário é ou
 
 Seu login chega por e-mail depois da aprovação.
 
+> **O NPAD não te devolve nenhuma chave.** Ele guarda a sua pública no servidor;
+> a privada fica só com você e é ela que responde ao servidor na hora de
+> conectar. Não existe arquivo para baixar e salvar, diferente de senha ou
+> certificado.
+
 ### Conecte
 
 ```bash
