@@ -27,7 +27,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$FishellVersion = '2.6'
+$FishellVersion = '2.7'
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 # O codigo vive em src/powershell/, mas config.ps1 e .ssh/ sao do usuario e
 # ficam na raiz do repo, dois niveis acima.
@@ -131,7 +131,9 @@ function Set-Lang {
             STEP_KEYGEN='create your ssh key'
             STEP_COPYKEY='copy the key you already have into this folder'
             PRIV_INPLACE='using the key already in ~/.ssh, nothing to copy'
-            STEP_CONFIG='put that login in $NPAD_USER'
+            ASK_LOGIN='your NPAD login'
+            LOGIN_SAVED='login saved in'
+            LOGIN_BAD='invalid login. letters, digits, dot, hyphen or _ only'
             STEP_RERUN='run again'; KEY_FOUND='your public key:'
             KEY_INVALID='this public key does not look valid - do NOT register it'
             KEY_FILE='file:'
@@ -201,7 +203,9 @@ function Set-Lang {
             STEP_KEYGEN='gere sua chave ssh'
             STEP_COPYKEY='copie para cá a chave que você já tem'
             PRIV_INPLACE='usando a chave que já está em ~/.ssh, nada a copiar'
-            STEP_CONFIG='ponha esse login em $NPAD_USER'
+            ASK_LOGIN='seu login do NPAD'
+            LOGIN_SAVED='login salvo em'
+            LOGIN_BAD='login inválido. use só letras, números, ponto, hífen ou _'
             STEP_RERUN='rode de novo'; KEY_FOUND='sua chave pública:'
             KEY_INVALID='esta chave pública não parece válida - NÃO cadastre ela'
             KEY_FILE='arquivo:'
@@ -230,6 +234,8 @@ function Show-Onboarding {
     param([string]$Cfg)
     # Por definicao so' chegamos aqui sem usuario configurado.
     $script:NPAD_USER_SET = $false
+    $cfgPath = $Cfg
+    $haveKey = $false
     if ((Get-Location).Path -eq $RepoRoot) { $Cfg = 'config.ps1' }
     if (-not $script:SSH_KEYS_DIR) { $script:SSH_KEYS_DIR = Join-Path $RepoRoot '.ssh' }
     $pub = Join-Path $script:SSH_KEYS_DIR 'id_rsa.pub'
@@ -243,6 +249,7 @@ function Show-Onboarding {
         # Ja' tem chave: mostra a publica pra copiar, conferindo a integridade
         # antes, ela vai colada num formulario oficial do NPAD.
         if (Test-PubKey $pub) {
+            $haveKey = $true
             Write-Line "  ${GD}$($L.KEY_FOUND)${R}"
             Write-Line ""
             Write-Line "${GB}$((Get-Content $pub -Raw).Trim())${R}"
@@ -280,12 +287,61 @@ function Show-Onboarding {
     Write-Line "  ${YEL}$n.${R} $($L.STEP_REGISTER)"
     Write-Line "     ${CYA}https://npad.ufrn.br/npad/primeirospassos${R}"
     $n++
-    Write-Line "  ${YEL}$n.${R} $($L.STEP_CONFIG)"
-    Write-Line "     ${G}PS> notepad $Cfg${R}"
-    $n++
+
+    # Aqui havia um passo "edite o config.ps1" com um notepad. Confundia: o
+    # aluno acabava de colar a chave num formulario e levava um comando de
+    # edicao de arquivo pela frente. Agora o proprio fishell pergunta o login
+    # e grava. So' pergunta quando ja' existe chave (sem chave nao ha'
+    # cadastro, logo nao ha' login) e quando ha' terminal.
+    if ($haveKey -and -not [Console]::IsInputRedirected) {
+        Write-Line ""
+        $ans = Prompt-Value -Label $L.ASK_LOGIN
+        # So' apara as pontas: apagar todo espaco transformaria "nome errado"
+        # num login plausivel e gravaria a besteira sem avisar.
+        if ($null -ne $ans) { $ans = $ans.Trim() }
+        if (-not [string]::IsNullOrEmpty($ans)) {
+            if ($ans -match '^[A-Za-z0-9._-]+$') {
+                if (Write-NpadUser $cfgPath $ans) {
+                    $script:NPAD_USER = $ans
+                    $script:NPAD_USER_SET = $true
+                    Write-Line ""
+                    Log-Ok "$($L.LOGIN_SAVED) $Cfg"
+                    Write-Line ""
+                    return $true
+                }
+            } else {
+                Write-Line ""
+                Log-Err $L.LOGIN_BAD
+            }
+        }
+        Write-Line ""
+    }
+
     Write-Line "  ${YEL}$n.${R} $($L.STEP_RERUN)"
     Write-Line "     ${G}PS> bin\fishell.cmd${R}"
     Write-Line ""
+    return $false
+}
+
+# Reescreve so' a linha do $NPAD_USER, preservando comentarios e o resto da
+# config.
+function Write-NpadUser {
+    param([string]$Cfg, [string]$User)
+    try {
+        $linhas = @(Get-Content -LiteralPath $Cfg)
+        $achou = $false
+        $saida = foreach ($l in $linhas) {
+            if (-not $achou -and $l -match '^\s*\$NPAD_USER\s*=') {
+                $achou = $true
+                "`$NPAD_USER = '$User'"
+            } else { $l }
+        }
+        if (-not $achou) { $saida = @($saida) + "`$NPAD_USER = '$User'" }
+        Set-Content -LiteralPath $Cfg -Value $saida -Encoding UTF8
+        return $true
+    } catch {
+        return $false
+    }
 }
 
 # -Lenient: nao aborta se $NPAD_USER ainda nao estiver preenchido. Usado pelo
@@ -306,8 +362,9 @@ function Load-Config {
             # 2a, quando o mesmo config ja' existe.
             . $cfg
             if ($SSH_KEYS_DIR) { $script:SSH_KEYS_DIR = $SSH_KEYS_DIR }
-            Show-Onboarding $cfg
-            exit 1
+            if (-not (Show-Onboarding $cfg)) { exit 1 }
+            $script:NPAD_USER_SET = $true
+            $NPAD_USER = $script:NPAD_USER
         } else {
             Log-Err $L.CFG_NOTEMPLATE
             exit 1
@@ -316,8 +373,11 @@ function Load-Config {
     if (Test-Path $cfg) { . $cfg }
     if ([string]::IsNullOrWhiteSpace($NPAD_USER) -or $NPAD_USER -eq 'seu_usuario_aqui') {
         $script:NPAD_USER_SET = $false
-        Show-Onboarding $cfg
-        exit 1
+        # O roteiro pergunta o login e grava sozinho quando da'; so' sai
+        # quando nao tem como perguntar (stdin redirecionado) ou quando o
+        # usuario nao respondeu.
+        if (-not (Show-Onboarding $cfg)) { exit 1 }
+        $NPAD_USER = $script:NPAD_USER
     }
     $script:NPAD_USER = $NPAD_USER
     if ($NPAD_HOST) { $script:NPAD_HOST = $NPAD_HOST }

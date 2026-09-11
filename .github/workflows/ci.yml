@@ -110,6 +110,11 @@ jobs:
       - name: seletor de arquivos local (setas, entrar em pasta)
         run: python3 .github/scripts/test_picker.py
 
+      # O roteiro de 1a execucao pergunta o login em vez de mandar rodar um
+      # sed. So' funciona com tty, entao o CI precisa de pty pra cobrir isso.
+      - name: primeira execução pergunta o login e grava no config.sh
+        run: python3 .github/scripts/test_onboarding_login.py
+
       - name: validador da chave pública
         run: bash .github/scripts/test_validate_pubkey.sh
 

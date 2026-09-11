@@ -9,7 +9,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # O codigo vive em src/bash/, mas config.sh e .ssh/ sao do usuario e ficam na
 # raiz do repo, dois niveis acima.
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-FISHELL_VERSION="2.6"
+FISHELL_VERSION="2.7"
 
 # Idioma escolhido pelo ambiente vence o do config.sh; guardado antes de
 # sourcear a config justamente pra poder reaplicar depois.
@@ -154,7 +154,9 @@ set_lang() {
         L_STDOUT_BEGIN="─── remote stdout ───"; L_STDOUT_END="─── end ─────────────"
         L_FIRSTRUN="first run, follow the steps:"
         L_STEP_REGISTER="register your public key (your login comes by e-mail)"
-        L_STEP_CONFIG="put that login in NPAD_USER"
+        L_ASK_LOGIN="your NPAD login"
+        L_LOGIN_SAVED="login saved in"
+        L_LOGIN_BAD="invalid login. letters, digits, dot, hyphen or _ only"
         L_STEP_RERUN="run again"
         L_KEY_FOUND="your public key:"
         L_KEY_INVALID="this public key does not look valid, do NOT register it"
@@ -226,7 +228,9 @@ set_lang() {
         L_STDOUT_BEGIN="─── saída remota ────"; L_STDOUT_END="─── fim ─────────────"
         L_FIRSTRUN="primeira execução, siga os passos:"
         L_STEP_REGISTER="cadastre a chave pública (o login chega por e-mail)"
-        L_STEP_CONFIG="ponha esse login em NPAD_USER"
+        L_ASK_LOGIN="seu login do NPAD"
+        L_LOGIN_SAVED="login salvo em"
+        L_LOGIN_BAD="login inválido. use só letras, números, ponto, hífen ou _"
         L_STEP_RERUN="rode de novo"
         L_KEY_FOUND="sua chave pública:"
         L_KEY_INVALID="esta chave pública não parece válida, NÃO cadastre ela"
@@ -348,20 +352,15 @@ load_config() {
 
     if [[ ! -f "$cfg" ]]; then
         log_warn "$L_CFG_NOTFOUND $cfg"
-        if [[ -f "$example" ]]; then
-            log_info "$L_CFG_COPY"
-            cp "$example" "$cfg"
-            # Sourceia o que acabou de ser copiado: sem isso o roteiro da 1a
-            # execucao usaria o fallback e mostraria um passo diferente do da
-            # 2a, quando o mesmo config ja' existe.
-            # shellcheck source=/dev/null
-            source "$cfg"
-            show_onboarding "$cfg"
-            exit 1
-        else
+        if [[ ! -f "$example" ]]; then
             log_err "$L_CFG_NOTEMPLATE"
             exit 1
         fi
+        log_info "$L_CFG_COPY"
+        cp "$example" "$cfg"
+        # Segue o fluxo normal a partir daqui: sourceia o que acabou de ser
+        # copiado e cai no mesmo roteiro da 2a execucao. Sem isso os dois
+        # casos mostravam passos diferentes.
     fi
 
     # shellcheck source=/dev/null
@@ -378,9 +377,10 @@ load_config() {
     [[ -n "$FISHELL_LANG_ENV" ]] && FISHELL_LANG="$FISHELL_LANG_ENV"
     set_lang
 
+    # O roteiro pergunta o login e grava sozinho quando da'; so' sai quando
+    # nao tem como perguntar (sem tty) ou quando o usuario nao respondeu.
     if [[ "$NPAD_USER_SET" == "0" ]]; then
-        show_onboarding "$cfg"
-        exit 1
+        show_onboarding "$cfg" || exit 1
     fi
 
     resolve_keys_dir
@@ -405,7 +405,7 @@ resolve_keys_dir() {
 # NPAD_USER", que era um beco sem saida: nesse ponto o usuario ainda nao TEM
 # um login do NPAD, ele so' existe depois de cadastrar a chave publica.
 show_onboarding() {
-    local cfg="$1"
+    local cfg_path="$1" cfg="$1" have_key=0
     # Na raiz do repo mostra so' "config.sh": o caminho absoluto do Colab e'
     # enorme e nao cabe na linha.
     [[ "$PWD" == "$REPO_ROOT" ]] && cfg="config.sh"
@@ -419,6 +419,7 @@ show_onboarding() {
         # Ja' tem chave: mostra a publica pra copiar, conferindo a integridade
         # antes, ela vai colada num formulario oficial do NPAD.
         if validate_pubkey "$pub"; then
+            have_key=1
             printf '  %b%s%b\n\n' "$G_DIM" "$L_KEY_FOUND" "$C_RESET"
             printf '%b%s%b\n\n' "$G_BRIGHT" "$(cat "$pub")" "$C_RESET"
             printf '  %b%s %s%b\n\n' "$G_DIM" "$L_KEY_FILE" "$pub" "$C_RESET"
@@ -453,13 +454,59 @@ show_onboarding() {
     printf '  %b%d.%b %s\n     %bhttps://npad.ufrn.br/npad/primeirospassos%b\n' \
         "$YEL" "$n" "$C_RESET" "$L_STEP_REGISTER" "$CYA" "$C_RESET"
     n=$((n+1))
-    # Um `sed` em vez de sugerir editor: o terminal do Colab nao tem nano, e
-    # apontar o painel Arquivos so' serviria la'.
-    printf '  %b%d.%b %s\n     %b$ sed -i '"'"'s/seu_usuario_aqui/SEU_LOGIN/'"'"' %s%b\n' \
-        "$YEL" "$n" "$C_RESET" "$L_STEP_CONFIG" "$G" "$cfg" "$C_RESET"
-    n=$((n+1))
+
+    # Aqui havia um passo "edite o config.sh", com um `sed` pronto para
+    # copiar. Confundia: o aluno acabava de colar a chave num formulario e
+    # levava um comando de edicao de arquivo pela frente. Agora o proprio
+    # fishell pergunta o login e grava. So' pergunta quando ja' existe chave
+    # (sem chave nao ha' cadastro, logo nao ha' login) e quando ha' terminal.
+    if (( have_key )) && [[ -t 0 ]]; then
+        local ans=""
+        printf '\n'
+        read_local_path ans "$L_ASK_LOGIN"
+        # So' apara as pontas: apagar todo espaco transformaria "nome errado"
+        # num login plausivel e gravaria a besteira sem avisar.
+        ans="${ans#"${ans%%[![:space:]]*}"}"
+        ans="${ans%"${ans##*[![:space:]]}"}"
+        if [[ -n "$ans" ]]; then
+            if [[ "$ans" =~ ^[A-Za-z0-9._-]+$ ]]; then
+                if write_npad_user "$cfg_path" "$ans"; then
+                    NPAD_USER="$ans"
+                    NPAD_USER_SET=1
+                    printf '\n'
+                    log_ok "$L_LOGIN_SAVED $cfg"
+                    printf '\n'
+                    return 0
+                fi
+            else
+                printf '\n'
+                log_err "$L_LOGIN_BAD"
+            fi
+        fi
+        printf '\n'
+    fi
+
     printf '  %b%d.%b %s\n     %b$ bash bin/fishell.sh%b\n\n' \
         "$YEL" "$n" "$C_RESET" "$L_STEP_RERUN" "$G" "$C_RESET"
+    return 1
+}
+
+# Reescreve so' a linha do NPAD_USER, preservando comentarios e o resto da
+# config. `cat >` em vez de `sed -i` de proposito: o sed troca o inode, e no
+# Drive montado por FUSE isso as vezes falha.
+write_npad_user() {
+    local cfg="$1" user="$2" tmp
+    tmp="$(mktemp)" || return 1
+    if grep -q '^[[:space:]]*NPAD_USER=' "$cfg"; then
+        awk -v u="$user" '
+            !feito && /^[[:space:]]*NPAD_USER=/ { print "NPAD_USER=\"" u "\""; feito=1; next }
+            { print }
+        ' "$cfg" > "$tmp" || { rm -f "$tmp"; return 1; }
+    else
+        { cat "$cfg"; printf 'NPAD_USER="%s"\n' "$user"; } > "$tmp" || { rm -f "$tmp"; return 1; }
+    fi
+    cat "$tmp" > "$cfg" || { rm -f "$tmp"; return 1; }
+    rm -f "$tmp"
 }
 
 # ─── Setup SSH ────────────────────────────────────────────────

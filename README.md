@@ -180,16 +180,17 @@ você não precisa cadastrar nada de novo no NPAD.
 > chaves no `~/.ssh`, e sem isso o `test` falha com
 > `no such identity: ~/.ssh/id_rsa`, mesmo com o caminho certo no `config.sh`.
 
-### Preencha seu login e rode
-
-Troque `seu_usuario_aqui` pelo login do NPAD:
+### Rode
 
 ```bash
-sed -i 's/seu_usuario_aqui/SEU_LOGIN/' config.sh
+./bin/fishell.sh
 ```
 
-(No macOS o `sed` pede um argumento a mais: `sed -i '' 's/.../.../'`. Ou abra
-no editor que preferir, é um shell script comum.)
+Na primeira vez ele mostra sua chave pública, o link do cadastro e pergunta
+seu login do NPAD, que fica gravado no `config.sh`. Depois disso instala as
+chaves, registra o alias `npad` e abre o painel.
+
+Os mesmos passos em comandos diretos, se preferir:
 
 ```bash
 ./bin/fishell.sh setup     # instala as chaves e registra o alias npad

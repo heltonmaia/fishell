@@ -53,6 +53,7 @@ done
 
 bash .github/scripts/test_validate_pubkey.sh        # validador da chave pública
 python3 .github/scripts/check_i18n.py               # paridade das traduções
+python3 .github/scripts/test_onboarding_login.py    # 1ª execução pergunta o login
 
 python3 tools/make-screenshot.py                    # docs/screenshot.png (pt)
 python3 tools/make-screenshot.py --lang en -o docs/screenshot-en.png
@@ -112,6 +113,26 @@ Todas as strings de usuário ficam numa tabela única por idioma: `set_lang()`
 atribui `L_*` no bash, `Set-Lang` preenche o hashtable `$L` no ps1, mesmas
 chaves, mesma ordem nos dois arquivos. **String nova entra nas quatro tabelas**
 (pt/en × bash/ps1), e as do painel respeitam os limites de 20/16 colunas.
+
+## A primeira execução pergunta, não manda editar
+
+Sem `NPAD_USER` preenchido o script mostra a chave pública, o link do cadastro
+e **pergunta o login**, gravando-o no `config.sh` (`write_npad_user` no bash,
+`Write-NpadUser` no ps1) antes de seguir para o setup. No lugar disso havia um
+passo `sed -i 's/seu_usuario_aqui/SEU_LOGIN/' config.sh`, retirado em
+2026-09-10: chegava logo depois de o aluno colar a chave num formulário
+oficial, e virava um comando de edição de arquivo no meio do caminho.
+
+Três recusas que precisam continuar valendo, todas cobertas por
+`test_onboarding_login.py`:
+
+- **sem chave, não pergunta.** O login só existe depois do cadastro, e o
+  cadastro exige a chave. Perguntar ali seria um beco sem saída.
+- **sem tty, não pergunta.** No CI e em `| pipe` o `read` não tem quem
+  responda; o roteiro volta a terminar com "rode de novo".
+- **login fora de `[A-Za-z0-9._-]` não entra no arquivo.** A resposta só é
+  aparada nas pontas, nunca "limpa": apagar os espaços de "nome errado"
+  gravaria um login plausível e errado sem avisar.
 
 ## O menu é deliberadamente enxuto
 
