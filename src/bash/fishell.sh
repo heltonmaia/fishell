@@ -165,6 +165,7 @@ set_lang() {
         L_STATUS_STEP="system readout"
         L_ST_USER="USER"; L_ST_HOST="HOST"; L_ST_PORT="PORT"
         L_ST_ALIAS="ALIAS"; L_ST_KEYS="KEYS_DIR"; L_ST_VERSION="VERSION"
+        L_ST_OPTIONAL="optional: saves confirming the fingerprint each session"
         ;;
       *)
         FISHELL_LANG=pt
@@ -236,6 +237,7 @@ set_lang() {
         L_STATUS_STEP="configuração atual"
         L_ST_USER="USUÁRIO"; L_ST_HOST="HOST"; L_ST_PORT="PORTA"
         L_ST_ALIAS="ALIAS"; L_ST_KEYS="CHAVES"; L_ST_VERSION="VERSÃO"
+        L_ST_OPTIONAL="opcional: evita reconfirmar a fingerprint a cada sessão"
         ;;
     esac
 }
@@ -773,16 +775,22 @@ show_status() {
     _st "$L_ST_KEYS"    "$SSH_KEYS_DIR"
     # Dizer so' ONDE procura nao ajuda: o que trava o aluno e' nao saber se os
     # arquivos estao la'. Mostra o inventario da pasta.
-    local f mark inv=""
+    # O known_hosts e' o unico opcional dos tres: sem ele o ssh so' pergunta a
+    # fingerprint uma vez. Marcar com o mesmo ✗ vermelho dos outros faria
+    # parecer que falta algo essencial.
+    local f mark inv="" falta_kh=""
     for f in id_rsa id_rsa.pub known_hosts; do
         if [[ -f "$SSH_KEYS_DIR/$f" ]]; then
             mark="$(printf '%b✓%b' "$G_BRIGHT" "$C_RESET")"
+        elif [[ "$f" == "known_hosts" ]]; then
+            mark="$(printf '%b·%b' "$G_DIM" "$C_RESET")"; falta_kh=1
         else
             mark="$(printf '%b✗%b' "$RED" "$C_RESET")"
         fi
         inv+="$mark $f   "
     done
     printf '  %s%s\n' "$(pad 10 "")" "$inv"
+    [[ -n "$falta_kh" ]] && printf '  %s%b%s%b\n' "$(pad 10 "")" "$G_DIM" "$L_ST_OPTIONAL" "$C_RESET"
     _st "$L_ST_VERSION" "fishell v$FISHELL_VERSION"
     hline 50 ─
 }

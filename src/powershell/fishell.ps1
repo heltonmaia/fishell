@@ -138,6 +138,7 @@ function Set-Lang {
             STATUS_STEP='system readout'
             ST_USER='USER'; ST_HOST='HOST'; ST_PORT='PORT'
             ST_ALIAS='ALIAS'; ST_KEYS='KEYS_DIR'; ST_VERSION='VERSION'
+            ST_OPTIONAL='optional: saves confirming the fingerprint each session'
         }
     } else {
         $script:FISHELL_LANG = 'pt'
@@ -207,6 +208,7 @@ function Set-Lang {
             STATUS_STEP='configuração atual'
             ST_USER='USUÁRIO'; ST_HOST='HOST'; ST_PORT='PORTA'
             ST_ALIAS='ALIAS'; ST_KEYS='CHAVES'; ST_VERSION='VERSÃO'
+            ST_OPTIONAL='opcional: evita reconfirmar a fingerprint a cada sessão'
         }
     }
 }
@@ -683,12 +685,18 @@ function Show-Status {
     }
     # Dizer só ONDE procura não ajuda: o que trava o usuário é não saber se os
     # arquivos estão lá. Mostra o inventário da pasta.
-    $inv = ''
+    # O known_hosts e' o unico opcional dos tres: sem ele o ssh so' pergunta a
+    # fingerprint uma vez. Marcar igual aos outros faria parecer que falta
+    # algo essencial.
+    $inv = ''; $faltaKh = $false
     foreach ($f in @('id_rsa', 'id_rsa.pub', 'known_hosts')) {
-        $mark = if (Test-Path (Join-Path $script:SSH_KEYS_DIR $f)) { "${GB}v${R}" } else { "${RED}x${R}" }
+        if (Test-Path (Join-Path $script:SSH_KEYS_DIR $f)) { $mark = "${GB}v${R}" }
+        elseif ($f -eq 'known_hosts') { $mark = "${GD}.${R}"; $faltaKh = $true }
+        else { $mark = "${RED}x${R}" }
         $inv += "$mark $f   "
     }
     Write-Line ("  " + (' ' * 10) + " $inv")
+    if ($faltaKh) { Write-Line ("  " + (' ' * 10) + " ${GD}$($L.ST_OPTIONAL)${R}") }
     Write-Line "${GD}$line${R}"
 }
 
