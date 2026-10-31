@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from ..core.estado import Estado
-from ..core.modelos import ErroReceita, EstadoJob, Job, Receita, Recurso, SecaoReceita
+from ..core.modelos import TERMINAIS, ErroReceita, EstadoJob, Job, Receita, Recurso, SecaoReceita
 from .base import Saida
 from .conexao import Executor, executar_subprocess
 
@@ -78,26 +78,52 @@ class AdaptadorLocal:
             return ""
 
     # --- leitura -----------------------------------------------------
-    def listar_jobs(self) -> list[Job]:
+    def _registros(self):
         desde = datetime.now() - timedelta(days=1)
-        registros = self.estado.recentes(self.nome, desde)
+        vistos: dict[str, object] = {}
+        for r in self.estado.ativos(self.nome) + self.estado.recentes(self.nome, desde):
+            vistos.setdefault(r.job_id, r)
+        return sorted(vistos.values(), key=lambda r: r.inicio)
+
+    def _sessoes(self) -> set[str] | None:
+        """Sessões vivas; None quando o tmux falhou por outro motivo (desconhecido)."""
         r = self._tmux("list-sessions", "-F", "#{session_name}")
-        vivas = set(r.saida.split()) if r.codigo == 0 else set()
+        if r.codigo == 0:
+            return set(r.saida.split())
+        if "no server running" in r.erro or "error connecting to" in r.erro:
+            return set()
+        return None
+
+    def _codigo_saida(self, job_id: str) -> str | None:
+        try:
+            texto = (self.dir_jobs / f"{job_id}.exit").read_text().strip()
+        except OSError:
+            return None
+        return texto or None
+
+    def listar_jobs(self) -> list[Job]:
+        vivas = self._sessoes()
         jobs: list[Job] = []
-        for reg in registros:
+        for reg in self._registros():
             motivo = ""
-            arq_exit = self.dir_jobs / f"{reg.job_id}.exit"
-            if reg.estado == EstadoJob.CANCELADO:
-                est = EstadoJob.CANCELADO
-            elif arq_exit.exists() and arq_exit.read_text().strip():
-                est = EstadoJob.OK if arq_exit.read_text().strip() == "0" else EstadoJob.FALHOU
+            codigo = self._codigo_saida(reg.job_id)
+            if reg.estado in TERMINAIS:
+                est = reg.estado
+                if est == EstadoJob.FALHOU and codigo is None:
+                    motivo = "sessão sumiu"
+            elif codigo is not None:
+                est = EstadoJob.OK if codigo == "0" else EstadoJob.FALHOU
                 self.estado.atualizar(self.nome, reg.job_id, est)
+            elif vivas is None:
+                est = reg.estado
             elif f"fishell-{reg.job_id}" in vivas:
                 est = EstadoJob.RODANDO
+                if reg.estado != est:
+                    self.estado.atualizar(self.nome, reg.job_id, est)
             else:
-                est = EstadoJob.DESCONHECIDO
+                est = EstadoJob.FALHOU
                 motivo = "sessão sumiu"
-                self.estado.atualizar(self.nome, reg.job_id, EstadoJob.FALHOU)
+                self.estado.atualizar(self.nome, reg.job_id, est)
             ultima = ""
             if reg.log:
                 linhas = [l for l in self._cauda(Path(reg.log)).splitlines() if l.strip()]
@@ -154,7 +180,10 @@ class AdaptadorLocal:
         id_ = self._novo_id()
         log = self.dir_jobs / f"{id_}.log"
         fim = self.dir_jobs / f"{id_}.exit"
-        script = f"{{ {secao.comando} ; }} > {_q(str(log))} 2>&1; echo $? > {_q(str(fim))}"
+        script = (
+            f"bash -c {_q(secao.comando)} > {_q(str(log))} 2>&1; "
+            f"echo $? > {_q(str(fim))}"
+        )
         r = self._tmux(
             "new-session", "-d", "-s", f"fishell-{id_}", "-c", str(receita.raiz),
             "bash", "-c", script,

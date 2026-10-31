@@ -1,6 +1,8 @@
 import os
 import shutil
+import sqlite3
 import time
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -86,6 +88,7 @@ def test_comando_com_aspas(estado, tmp_path):
     assert argv[:5] == ["tmux", "new-session", "-d", "-s", f"fishell-{id_}"]
     assert argv[5:7] == ["-c", "/tmp/meu proj"]
     assert 'python train.py --nome "a b"' in argv[-1]
+    assert argv[-1].startswith("bash -c ")
     assert id_.startswith("l")
     assert [r.job_id for r in estado.ativos("local")] == [id_]
 
@@ -127,9 +130,10 @@ def test_sessao_sumida_fica_desconhecido(estado, tmp_path):
     a = novo(estado, tmp_path, f)
     estado.registrar("local", "l20260101-000000", "proj", "proj", None, None)
     j = a.listar_jobs()[0]
-    assert j.estado == EstadoJob.DESCONHECIDO
+    assert j.estado == EstadoJob.FALHOU
     assert j.motivo == "sessão sumiu"
     assert estado.ativos("local") == []
+    assert estado.recentes("local", datetime.min)[0].estado == EstadoJob.FALHOU
 
 
 def test_exit_file_decide(estado, tmp_path):
@@ -154,7 +158,57 @@ def test_cancelar(estado, tmp_path):
     estado.registrar("local", "l9", "proj", "proj", None, None)
     a.cancelar("l9")
     assert f.chamadas[0] == ["tmux", "kill-session", "-t", "fishell-l9"]
-    assert estado.recentes("local", __import__("datetime").datetime.min)[0].estado == EstadoJob.CANCELADO
+    assert estado.recentes("local", datetime.min)[0].estado == EstadoJob.CANCELADO
+
+
+def reg_estado(estado, id_):
+    return [r for r in estado.recentes("local", datetime.min) if r.job_id == id_][0].estado
+
+
+def test_terminal_nao_e_reescrito(estado, tmp_path):
+    f = Falso({"list-sessions": Resultado(1, "", "no server running on /tmp/x")})
+    a = novo(estado, tmp_path, f)
+    estado.registrar("local", "l1", "proj", "proj", None, None)
+    (a.dir_jobs / "l1.exit").write_text("0\n")
+    chamadas = []
+    original = estado.atualizar
+    estado.atualizar = lambda *x: chamadas.append(x) or original(*x)
+    assert a.listar_jobs()[0].estado == EstadoJob.OK
+    assert a.listar_jobs()[0].estado == EstadoJob.OK
+    assert len(chamadas) == 1
+    (a.dir_jobs / "l1.exit").unlink()
+    assert a.listar_jobs()[0].estado == EstadoJob.OK
+    assert reg_estado(estado, "l1") == EstadoJob.OK
+    assert len(chamadas) == 1
+
+
+def test_falha_do_tmux_nao_escreve(estado, tmp_path):
+    f = Falso({"list-sessions": Resultado(1, "", "protocol version mismatch")})
+    a = novo(estado, tmp_path, f)
+    estado.registrar("local", "l1", "proj", "proj", None, None)
+    estado.atualizar("local", "l1", EstadoJob.RODANDO)
+    assert a.listar_jobs()[0].estado == EstadoJob.RODANDO
+    assert reg_estado(estado, "l1") == EstadoJob.RODANDO
+
+
+def test_cancelado_aparece_na_listagem(estado, tmp_path):
+    f = Falso({"list-sessions": Resultado(1, "", "no server running")})
+    a = novo(estado, tmp_path, f)
+    estado.registrar("local", "l9", "proj", "proj", None, None)
+    a.cancelar("l9")
+    assert a.listar_jobs()[0].estado == EstadoJob.CANCELADO
+
+
+def test_job_antigo_ainda_rodando_aparece(estado, tmp_path):
+    f = Falso({"list-sessions": Resultado(0, "fishell-l1\n", "")})
+    a = novo(estado, tmp_path, f)
+    estado.registrar("local", "l1", "proj", "proj", None, None)
+    antigo = (datetime.now() - timedelta(hours=30)).isoformat()
+    with sqlite3.connect(estado.arquivo) as con:
+        con.execute("UPDATE jobs SET inicio = ?", (antigo,))
+    jobs = a.listar_jobs()
+    assert [j.id for j in jobs] == ["l1"]
+    assert jobs[0].estado == EstadoJob.RODANDO
 
 
 @pytest.mark.skipif(shutil.which("tmux") is None, reason="sem tmux")
@@ -164,8 +218,15 @@ def test_job_real_no_tmux(tmp_path):
     sock = f"fishell-teste-{os.getpid()}"
     a = AdaptadorLocal(Estado(tmp_path / "e.db"), tmp_path / "jobs", tmux_socket=sock)
     try:
-        a.submeter(receita(raiz=str(tmp_path), comando="echo oi"), None, None, ignorar)
+        r = lambda c: receita(raiz=str(tmp_path), comando=c)
+        a.submeter(r("echo oi"), None, None, ignorar)
         espera_ate(lambda: a.listar_jobs()[0].estado == EstadoJob.OK)
         assert a.listar_jobs()[0].ultima_linha == "oi"
+        a.submeter(r("exit 3"), None, None, ignorar)
+        a.submeter(r("echo ok # comentario"), None, None, ignorar)
+        espera_ate(lambda: all(j.estado in (EstadoJob.OK, EstadoJob.FALHOU) for j in a.listar_jobs()) and len(a.listar_jobs()) == 3)
+        por_cmd = {j.id: j for j in a.listar_jobs()}
+        estados = sorted(j.estado.value for j in por_cmd.values())
+        assert estados == ["falhou", "ok", "ok"]
     finally:
         executar_subprocess(["tmux", "-L", sock, "kill-server"], 10, None)
