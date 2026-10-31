@@ -1,0 +1,5 @@
+2200000_[48-65%16]|treino|PENDING|0:00|amd-512|(JobArrayTaskLimit)
+2200000_45|treino|RUNNING|12:30|amd-512|node01
+2200000_46|treino|RUNNING|12:28|amd-512|node02
+2200000_47|treino|RUNNING|3:05|amd-512|node03
+2200100|infer|PENDING|0:00|gpu-4-a100|(Resources)
