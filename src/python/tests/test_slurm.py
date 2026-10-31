@@ -195,7 +195,8 @@ def test_montar_ambiente_em_fluxo(adaptador, conexao):
 
 def test_submeter_job_com_array(adaptador, conexao, estado):
     conexao.respostas.append(Resultado(0, "2200000\n", ""))
-    id_ = adaptador.submeter(receita(job="train.sbatch"), "gpu-4-a100", "1-65%16", ignorar)
+    r = receita(job="train.sbatch", log="logs/fishell_%A_%a.out")
+    id_ = adaptador.submeter(r, "gpu-4-a100", "1-65%16", ignorar)
     cmd = conexao.comandos[-1]
     assert "sbatch --parsable -p gpu-4-a100 --array=1-65%16 -o" in cmd and id_ == "2200000"
     assert "logs/fishell_%A_%a.out" in cmd and "mkdir -p /scratch/global/usuario/pose/logs" in cmd
@@ -208,7 +209,8 @@ def test_submeter_job_com_array(adaptador, conexao, estado):
 
 def test_submeter_job_simples_expande_o_log(adaptador, conexao, estado):
     conexao.respostas.append(Resultado(0, "77;npad\n", ""))
-    assert adaptador.submeter(receita(job="t.sbatch"), None, None, ignorar) == "77"
+    r = receita(job="t.sbatch", log="logs/fishell_%j.out")
+    assert adaptador.submeter(r, None, None, ignorar) == "77"
     assert "-p amd-512" in conexao.comandos[-1] and "--array" not in conexao.comandos[-1]
     assert estado.ativos()[0].log == "/scratch/global/usuario/pose/logs/fishell_77.out"
     assert estado.ativos()[0].array_total is None
@@ -434,3 +436,87 @@ def test_submeter_script_que_falha_traz_a_saida_no_erro(tmp_path, estado):
     assert "preparando" in str(e.value)
     assert "sbatch: error: invalid partition specified: xyz" in linhas
     assert estado.ativos() == []
+
+
+# --- F8: a saída do próprio projeto vale ------------------------------
+BASE = "/scratch/global/usuario/pose"
+
+
+def _com_sbatch(tmp_path, caminho, corpo, **kw):
+    arq = tmp_path / caminho
+    arq.parent.mkdir(parents=True, exist_ok=True)
+    arq.write_text(corpo)
+    return Receita(tmp_path, "pose", {"npad": secao(**kw)})
+
+
+def test_log_da_receita_passa_o_o(adaptador, conexao, estado, tmp_path):
+    r = _com_sbatch(tmp_path, "t.sbatch", "#!/bin/bash\n#SBATCH --output=nao/%j.out\n",
+                    job="t.sbatch", log="logs/meu_%j.out")
+    conexao.respostas.append(Resultado(0, "77\n", ""))
+    adaptador.submeter(r, None, None, ignorar)
+    cmd = conexao.comandos[-1]
+    assert f"-o {BASE}/logs/meu_%j.out" in cmd
+    assert f"mkdir -p {BASE}/logs" in cmd
+    assert estado.ativos()[0].log == f"{BASE}/logs/meu_77.out"
+
+
+def test_sem_log_na_receita_vale_o_output_do_sbatch(adaptador, conexao, estado, tmp_path):
+    corpo = (
+        "#!/bin/bash\n"
+        "#SBATCH --partition=amd-512     # onde rodar\n"
+        "#SBATCH -J treino\n"
+        "#SBATCH --output=saidas/%x_%j.out   # log do projeto\n"
+        "\n"
+        "python treino.py\n"
+        "#SBATCH --output=ignorado.out\n"
+    )
+    r = _com_sbatch(tmp_path, "code/t.sbatch", corpo, job="code/t.sbatch")
+    conexao.respostas.append(Resultado(0, "77\n", ""))
+    adaptador.submeter(r, None, None, ignorar)
+    cmd = conexao.comandos[-1]
+    assert " -o " not in cmd and "mkdir" not in cmd
+    assert cmd == f"cd {BASE} && sbatch --parsable -p amd-512 code/t.sbatch"
+    assert estado.ativos()[0].log == f"{BASE}/saidas/treino_77.out"
+
+
+def test_output_absoluto_e_array(adaptador, conexao, estado, tmp_path):
+    corpo = "#!/bin/bash\n#SBATCH -o /scratch/global/usuario/logs/r_%A_%a.out\n"
+    r = _com_sbatch(tmp_path, "t.sbatch", corpo, job="t.sbatch")
+    conexao.respostas.append(Resultado(0, "9\n", ""))
+    adaptador.submeter(r, None, "1-4", ignorar)
+    assert estado.ativos()[0].log == "/scratch/global/usuario/logs/r_9_%a.out"
+
+
+def test_sbatch_achado_pelo_mapa_do_enviar(adaptador, conexao, estado, tmp_path):
+    r = _com_sbatch(
+        tmp_path, "scripts/npad/x.sbatch", "#!/bin/bash\n#SBATCH -oout/%x-%j.log\n",
+        job="code/npad/x.sbatch", enviar=(Transferencia("scripts/", "code/"),),
+    )
+    conexao.respostas.append(Resultado(0, "5\n", ""))
+    adaptador.submeter(r, None, None, ignorar)
+    assert estado.ativos()[0].log == f"{BASE}/out/x.sbatch-5.log"
+
+
+def test_chdir_muda_a_pasta_do_output_relativo(adaptador, conexao, estado, tmp_path):
+    corpo = "#!/bin/bash\n#SBATCH --chdir=run\n#SBATCH --output out.txt\n"
+    r = _com_sbatch(tmp_path, "t.sbatch", corpo, job="t.sbatch")
+    conexao.respostas.append(Resultado(0, "6\n", ""))
+    adaptador.submeter(r, None, None, ignorar)
+    assert estado.ativos()[0].log == f"{BASE}/run/out.txt"
+
+
+def test_sem_output_vale_o_padrao_do_slurm(adaptador, conexao, estado, tmp_path):
+    r = _com_sbatch(tmp_path, "t.sbatch", "#!/bin/bash\n#SBATCH -p amd-512\necho oi\n",
+                    job="t.sbatch")
+    conexao.respostas += [Resultado(0, "7\n", ""), Resultado(0, "8\n", "")]
+    adaptador.submeter(r, None, None, ignorar)
+    adaptador.submeter(r, None, "1-3", ignorar)
+    logs = {x.job_id: x.log for x in estado.ativos()}
+    assert logs == {"7": f"{BASE}/slurm-7.out", "8": f"{BASE}/slurm-8_%a.out"}
+    assert all(" -o " not in c for c in conexao.comandos)
+
+
+def test_sbatch_ausente_no_local_vale_o_padrao(adaptador, conexao, estado):
+    conexao.respostas.append(Resultado(0, "3\n", ""))
+    adaptador.submeter(receita(job="sumiu.sbatch"), None, None, ignorar)
+    assert estado.ativos()[0].log == f"{BASE}/slurm-3.out"

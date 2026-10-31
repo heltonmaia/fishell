@@ -7,6 +7,7 @@ import re
 import shlex
 from dataclasses import replace
 from datetime import datetime, timedelta
+from pathlib import Path
 
 from ..core.estado import Estado, RegistroJob
 from ..core.modelos import (
@@ -64,6 +65,70 @@ def _fora_da_fila(ids: list[str]) -> str:
         f' | grep -qx -- "$j" || f="$f,$j"; done; '
         f'[ -z "$f" ] || sacct -j "${{f#,}}" -X -n -P -o {CAMPOS_SACCT}'
     )
+
+
+_DIRETIVAS = {
+    "-o": "output", "--output": "output",
+    "-J": "job-name", "--job-name": "job-name",
+    "-D": "chdir", "--chdir": "chdir",
+    "-a": "array", "--array": "array",
+}  # fmt: skip
+
+
+def ler_diretivas(texto: str) -> dict[str, str]:
+    """As opções `#SBATCH` que importam ao fishell (output, job-name, chdir, array).
+
+    Como o sbatch, para no primeiro comando; a última ocorrência vence.
+    """
+    achadas: dict[str, str] = {}
+    for linha in texto.splitlines():
+        linha = linha.strip()
+        if not linha:
+            continue
+        if not linha.startswith("#"):
+            break
+        partes = linha.split(None, 1)
+        if partes[0] != "#SBATCH" or len(partes) < 2:
+            continue
+        try:
+            fichas = shlex.split(partes[1], comments=True)
+        except ValueError:
+            continue
+        i = 0
+        while i < len(fichas):
+            f = fichas[i]
+            chave = valor = None
+            if f.startswith("--") and "=" in f:
+                nome, _, valor = f.partition("=")
+                chave = _DIRETIVAS.get(nome)
+            elif f in _DIRETIVAS:
+                chave = _DIRETIVAS[f]
+                if i + 1 < len(fichas):
+                    i += 1
+                    valor = fichas[i]
+            elif not f.startswith("--") and f[:2] in _DIRETIVAS:
+                chave, valor = _DIRETIVAS[f[:2]], f[2:]
+            if chave and valor:
+                achadas[chave] = valor
+            i += 1
+    return achadas
+
+
+def _sbatch_local(receita: Receita, secao: SecaoReceita) -> Path | None:
+    """O .sbatch na máquina local: pelo mapa do `enviar`, ou no mesmo caminho."""
+    job = secao.job or ""
+    candidatos = []
+    for t in secao.enviar:
+        if t.para.endswith("/") and t.de.endswith("/") and job.startswith(t.para):
+            candidatos.append(receita.raiz / (t.de + job[len(t.para):]))
+        elif t.para == job:
+            candidatos.append(receita.raiz / t.de)
+    candidatos.append(receita.raiz / job)
+    return next((c for c in candidatos if c.is_file()), None)
+
+
+def _abs(caminho: str, pasta: str) -> str:
+    return caminho if caminho.startswith("/") else f"{pasta}/{caminho}"
 
 
 def _script(base: str, script: str) -> str:
@@ -221,21 +286,35 @@ class AdaptadorSlurm:
         secao = self._secao(receita)
         base = self._base(secao)
         projeto = receita.nome
+        nome_slurm: str | None = None  # para o %x; no modo script não se sabe
         if secao.job:
             particao = particao or secao.particao
             if not particao:
                 raise ErroReceita(f"sem partição para submeter em {self.nome!r}")
-            modelo = secao.log or (
-                "logs/fishell_%A_%a.out" if array else "logs/fishell_%j.out"
-            )
-            log_abs = modelo if modelo.startswith("/") else f"{base}/{modelo}"
             opcoes = f"--parsable -p {_q(particao)}"
             if array:
                 opcoes += f" --array={_q(array)}"
-            cmd = (
-                f"mkdir -p {_q(os.path.dirname(log_abs))} && cd {_q(base)} && "
-                f"sbatch {opcoes} -o {_q(log_abs)} {_q(secao.job)}"
-            )
+            # o -o só quando a receita pede: senão vale o #SBATCH --output do
+            # projeto, ou o padrão do SLURM (slurm-%j.out na pasta de submissão)
+            sbatch = _sbatch_local(receita, secao)
+            try:
+                diretivas = ler_diretivas(sbatch.read_text(errors="replace")) if sbatch else {}
+            except OSError:
+                diretivas = {}
+            nome_slurm = diretivas.get("job-name") or os.path.basename(secao.job)
+            if secao.log:
+                log_abs = _abs(secao.log, base)
+                cmd = (
+                    f"mkdir -p {_q(os.path.dirname(log_abs))} && cd {_q(base)} && "
+                    f"sbatch {opcoes} -o {_q(log_abs)} {_q(secao.job)}"
+                )
+            else:
+                pasta = _abs(diretivas["chdir"], base) if "chdir" in diretivas else base
+                padrao = (
+                    "slurm-%A_%a.out" if array or "array" in diretivas else "slurm-%j.out"
+                )
+                log_abs = _abs(diretivas.get("output", padrao), pasta)
+                cmd = f"cd {_q(base)} && sbatch {opcoes} {_q(secao.job)}"
             r = self.conexao.comando(cmd)
             m = _ID_SBATCH.match(r.saida) if r.codigo == 0 else None
             if not m:
@@ -258,7 +337,11 @@ class AdaptadorSlurm:
         else:
             raise ErroReceita(f"a seção {self.nome!r} não define `job` nem `submeter`")
         id_ = m.group(1)
-        log = log_abs.replace("%j", id_).replace("%A", id_) if log_abs else None
+        log = None
+        if log_abs:
+            log = log_abs.replace("%j", id_).replace("%A", id_)
+            if nome_slurm:
+                log = log.replace("%x", nome_slurm)
         total = len(_tarefas(array)) if array else None
         self.estado.registrar(self.nome, id_, projeto, nome, log, total)
         return id_
