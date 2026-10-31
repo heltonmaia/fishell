@@ -61,3 +61,16 @@ def test_corrida_entre_instancias_so_uma_avisa(tmp_path):
     with ThreadPoolExecutor(8) as ex:
         res = list(ex.map(lambda x: x.atualizar("npad", "1", EstadoJob.OK), estados))
     assert res.count(True) == 1
+
+
+def test_pendentes_de_aviso(tmp_path):
+    from fishell.core.modelos import EstadoJob
+
+    e = Estado(tmp_path / "e.db")
+    e.registrar("local", "1", "p", "a", None, None)
+    e.registrar("local", "2", "p", "b", None, None)
+    e.registrar("local", "3", "p", "c", None, None)
+    e.atualizar("local", "1", EstadoJob.OK)
+    e.atualizar("local", "2", EstadoJob.FALHOU)
+    e.marcar_notificado("local", "2")
+    assert [r.job_id for r in e.pendentes_de_aviso()] == ["1"]

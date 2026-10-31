@@ -71,6 +71,15 @@ class Estado:
         with self._con() as con:
             return [_registro(l) for l in con.execute(sql + " ORDER BY inicio", args)]
 
+    def pendentes_de_aviso(self) -> list[RegistroJob]:
+        terminais = [e.value for e in TERMINAIS]
+        sql = (
+            f"SELECT {_COLS} FROM jobs WHERE notificado = 0 "
+            f"AND estado IN ({','.join('?' * len(terminais))}) ORDER BY inicio"
+        )
+        with self._con() as con:
+            return [_registro(l) for l in con.execute(sql, terminais)]
+
     def recentes(self, destino: str, desde: datetime) -> list[RegistroJob]:
         with self._con() as con:
             linhas = con.execute(

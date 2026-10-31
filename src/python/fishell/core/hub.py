@@ -6,6 +6,7 @@ import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import datetime
 
 from .. import textos
 from ..adapters.base import Adaptador, ErroAutenticacao, Indisponivel, Saida
@@ -19,6 +20,8 @@ class Visao:
     recursos: dict[str, list[Recurso]] = field(default_factory=dict)
     avisos: dict[str, str] = field(default_factory=dict)
     receitas: list[Receita] = field(default_factory=list)
+    indisponivel_ate: dict[str, datetime] = field(default_factory=dict)
+    sem_acesso: frozenset[str] = frozenset()
 
 
 def _nada() -> None:
@@ -46,6 +49,7 @@ class Hub:
         self._ultima: dict[str, float] = {}
         self._em_voo: set[str] = set()
         self._sem_acesso: set[str] = set()
+        self._indisp: dict[str, datetime] = {}
         self._sujos: set[str] = set()
 
     # --- consulta ----------------------------------------------------
@@ -61,13 +65,17 @@ class Hub:
                     continue
                 self._em_voo.add(nome)
                 self._sujos.discard(nome)
-            jobs, recursos, aviso, auth = self._consultar(ad)
+            jobs, recursos, aviso, auth, ate = self._consultar(ad)
             with self._trava:
                 self._em_voo.discard(nome)
                 if nome not in self._sujos:
                     self._ultima[nome] = self._relogio()
                 self._jobs[nome] = jobs
                 self._recursos[nome] = recursos
+                if ate is not None:
+                    self._indisp[nome] = ate
+                else:
+                    self._indisp.pop(nome, None)
                 if aviso:
                     self._avisos[nome] = aviso
                 else:
@@ -79,13 +87,13 @@ class Hub:
     @staticmethod
     def _consultar(ad: Adaptador):
         try:
-            return ad.listar_jobs(), ad.recursos(), "", False
+            return ad.listar_jobs(), ad.recursos(), "", False, None
         except Indisponivel as e:
-            return [], [], textos.HUB_INDISPONIVEL_ATE.format(hora=f"{e.ate:%H:%M}"), False
+            return [], [], textos.HUB_INDISPONIVEL_ATE.format(hora=f"{e.ate:%H:%M}"), False, e.ate
         except ErroAutenticacao:
-            return [], [], textos.HUB_SEM_ACESSO, True
+            return [], [], textos.HUB_SEM_ACESSO, True, None
         except Exception as e:  # noqa: BLE001 - nada pode derrubar a interface
-            return [], [], textos.HUB_ERRO_CONSULTA.format(erro=e), False
+            return [], [], textos.HUB_ERRO_CONSULTA.format(erro=e), False, None
 
     def _visao(self) -> Visao:
         with self._trava:
@@ -96,6 +104,8 @@ class Hub:
                 recursos={k: list(v) for k, v in self._recursos.items()},
                 avisos=dict(self._avisos),
                 receitas=list(self.receitas),
+                indisponivel_ate=dict(self._indisp),
+                sem_acesso=frozenset(self._sem_acesso),
             )
 
     # --- ações -------------------------------------------------------

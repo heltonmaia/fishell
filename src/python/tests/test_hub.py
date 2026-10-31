@@ -228,3 +228,16 @@ def test_acao_durante_consulta_em_andamento_mantem_destino_vencido(tmp_path):
     t.join(5)
     h.atualizar()
     assert [c for c, _ in lento.chamadas].count("listar_jobs") == 2
+
+
+def test_visao_expoe_indisponivel_e_sem_acesso(tmp_path):
+    ate = T0 + timedelta(minutes=30)
+    h = hub(
+        tmp_path,
+        npad=AdaptadorFalso("npad", erro=Indisponivel(ate)),
+        outro=AdaptadorFalso("outro", erro=ErroAutenticacao()),
+        ok=AdaptadorFalso("ok"),
+    )
+    v = h.atualizar()
+    assert v.indisponivel_ate == {"npad": ate}
+    assert v.sem_acesso == frozenset({"outro"})
