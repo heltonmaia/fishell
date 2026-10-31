@@ -320,3 +320,21 @@ async def test_cancelar_pede_confirmacao(tmp_path):
         app.screen.query_one("#sim", Button).press()
         await _esperar(app, pilot)
         assert _chamadas(hub, "npad", "cancelar") == [("cancelar", ("1",))]
+
+
+# --- F4: ambiente que falha aparece como erro --------------------------
+async def test_ambiente_com_codigo_diferente_de_zero_e_erro(tmp_path):
+    hub = _hub(tmp_path)
+    hub.adaptadores["npad"].codigo_ambiente = 254
+    app = FishellApp(hub)
+    avisos = []
+    app.notify = lambda msg, **kw: avisos.append((msg, kw.get("severity")))
+    async with app.run_test(size=(100, 40)) as pilot:
+        tela = await _abrir_modal(app, pilot)
+        await _escolher(tela, pilot)
+        tela.query_one("#ambiente", Button).press()
+        await _esperar(app, pilot)
+        esperado = textos.ACAO_ERRO.format(erro=textos.ACAO_AMBIENTE_FALHOU.format(codigo=254))
+        linhas = [l.text for l in tela.query_one(RichLog).lines]
+        assert linhas[-1] == esperado
+        assert (esperado, "error") in avisos

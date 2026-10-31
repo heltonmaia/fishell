@@ -168,7 +168,7 @@ class AdaptadorLocal:
         secao = self._secao(receita)
         if not secao.ambiente:
             raise ErroReceita("a seção 'local' não define `ambiente`")
-        cmd = f"cd {_q(str(receita.raiz))} && bash {_q(secao.ambiente)}"
+        cmd = f"{{ cd {_q(str(receita.raiz))} && bash {_q(secao.ambiente)}; }} 2>&1"
         return self._executar(["bash", "-c", cmd], None, saida).codigo
 
     def submeter(

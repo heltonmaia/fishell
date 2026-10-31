@@ -186,7 +186,10 @@ def test_montar_ambiente_em_fluxo(adaptador, conexao):
     conexao.respostas.append(Resultado(3, "", ""))
     codigo = adaptador.montar_ambiente(receita(ambiente="setup.sh"), ignorar)
     assert codigo == 3
-    assert conexao.comandos[-1] == "cd /scratch/global/usuario/pose && bash setup.sh"
+    assert conexao.comandos[-1] == (
+        "{ cd /scratch/global/usuario/pose && bash setup.sh; } 2>&1; "
+        'e=$?; [ "$e" -eq 255 ] && e=254; exit "$e"'
+    )
     assert conexao.sinks[-1] is ignorar
 
 
@@ -215,7 +218,9 @@ def test_submeter_script_le_fishell_job(adaptador, conexao, estado):
     conexao.respostas.append(Resultado(0, "montando\nfishell-job: 2200001\nfim", ""))
     id_ = adaptador.submeter(receita(submeter="go.sh"), None, None, ignorar)
     assert id_ == "2200001"
-    assert conexao.comandos[-1] == "cd /scratch/global/usuario/pose && bash go.sh"
+    assert conexao.comandos[-1].startswith(
+        "{ cd /scratch/global/usuario/pose && bash go.sh; } 2>&1; "
+    )
     assert conexao.sinks[-1] is ignorar
     assert estado.ativos()[0].job_id == "2200001"
 
@@ -373,3 +378,59 @@ def test_consulta_sem_janela_so_pede_os_que_sairam_da_fila(tmp_path, adaptador, 
     assert "-S" not in sem_janela[0].split()
     _, _, resto = r.stdout.partition(SEP_ANTIGOS)
     assert "1900000|antigo|TIMEOUT" in resto.partition(SEP_LOGS)[0]
+
+
+# --- F4: saída de erro do script e código 255 --------------------------
+def _conexao_local(tmp_path):
+    """Conexão de verdade cujo "ssh" roda o comando remoto num bash local."""
+    from fishell.adapters.conexao import Conexao, executar_subprocess
+
+    chamadas = []
+
+    def executar(argv, timeout, saida):
+        chamadas.append(argv)
+        if argv[0] == "ssh" and "-O" not in argv:
+            return executar_subprocess(["bash", "-c", argv[-1]], timeout, saida)
+        return Resultado(0, "", "")
+
+    return Conexao("npad", tmp_path / "ctl", executar), chamadas
+
+
+def _projeto_com_script(tmp_path, nome, corpo, **kw):
+    raiz = tmp_path / "proj"
+    raiz.mkdir(exist_ok=True)
+    (raiz / nome).write_text(corpo)
+    return Receita(raiz, "pose", {"npad": secao(remoto=str(raiz), **kw)})
+
+
+def test_script_com_stderr_e_saida_255_nao_bloqueia_o_destino(tmp_path, estado):
+    c, chamadas = _conexao_local(tmp_path)
+    a = AdaptadorSlurm("npad", c, estado)
+    r = _projeto_com_script(
+        tmp_path, "setup.sh", "echo para-stdout\necho para-stderr >&2\nexit 255\n",
+        ambiente="setup.sh",
+    )
+    linhas = []
+    assert a.montar_ambiente(r, linhas.append) == 254
+    assert linhas == ["para-stdout", "para-stderr"]
+    n = len(chamadas)
+    assert c.comando("true").codigo == 0  # sem bloqueio
+    assert len(chamadas) == n + 1
+    assert not (tmp_path / "ctl" / "npad.bloqueio").exists()
+
+
+def test_submeter_script_que_falha_traz_a_saida_no_erro(tmp_path, estado):
+    c, _ = _conexao_local(tmp_path)
+    a = AdaptadorSlurm("npad", c, estado)
+    r = _projeto_com_script(
+        tmp_path, "go.sh",
+        "echo preparando\necho 'sbatch: error: invalid partition specified: xyz' >&2\nexit 1\n",
+        submeter="go.sh", log="l.out",
+    )
+    linhas = []
+    with pytest.raises(ErroReceita) as e:
+        a.submeter(r, None, None, linhas.append)
+    assert "invalid partition specified" in str(e.value)
+    assert "preparando" in str(e.value)
+    assert "sbatch: error: invalid partition specified: xyz" in linhas
+    assert estado.ativos() == []

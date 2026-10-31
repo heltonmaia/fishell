@@ -21,6 +21,7 @@ class AdaptadorFalso:
         capacidades: frozenset[str] = TODAS,
         id_submetido: str = "999",
         linhas_log: tuple[str, ...] | list[str] = (),
+        codigo_ambiente: int = 0,
     ) -> None:
         self.nome = nome
         self.intervalo = intervalo
@@ -28,6 +29,7 @@ class AdaptadorFalso:
         self.erro = erro
         self.atraso = atraso
         self.id_submetido = id_submetido
+        self.codigo_ambiente = codigo_ambiente
         self._jobs = list(jobs)
         self._recursos = list(recursos)
         self._linhas_log = list(linhas_log)
@@ -60,7 +62,7 @@ class AdaptadorFalso:
     def montar_ambiente(self, receita: Receita, saida) -> int:
         self.chamadas.append(("montar_ambiente", (receita, saida)))
         self._dormir()
-        return 0
+        return self.codigo_ambiente
 
     def submeter(self, receita: Receita, particao, array, saida) -> str:
         self.chamadas.append(("submeter", (receita, particao, array, saida)))

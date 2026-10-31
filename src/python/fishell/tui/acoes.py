@@ -274,13 +274,16 @@ class NovoJobScreen(SaidaScreen):
     @on(Button.Pressed, "#ambiente")
     def _ambiente(self) -> None:
         p, d = self._projeto(), self._destino()
-        if p and d:
-            self._iniciar(
-                textos.ACAO_BOTAO_AMBIENTE,
-                lambda saida: textos.ACAO_CODIGO.format(
-                    codigo=self._hub.montar_ambiente(p, d, saida)
-                ),
-            )
+        if not (p and d):
+            return
+
+        def rodar(saida):
+            codigo = self._hub.montar_ambiente(p, d, saida)
+            if codigo != 0:
+                raise RuntimeError(textos.ACAO_AMBIENTE_FALHOU.format(codigo=codigo))
+            return textos.ACAO_CODIGO.format(codigo=codigo)
+
+        self._iniciar(textos.ACAO_BOTAO_AMBIENTE, rodar)
 
     @on(Button.Pressed, "#submeter")
     def _submeter(self) -> None:

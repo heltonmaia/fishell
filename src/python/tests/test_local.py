@@ -121,8 +121,16 @@ def test_montar_ambiente(estado, tmp_path):
     a = novo(estado, tmp_path, f)
     codigo = a.montar_ambiente(receita(ambiente="env setup.sh"), ignorar)
     assert codigo == 3
-    assert f.chamadas[0] == ["bash", "-c", "cd '/tmp/meu proj' && bash 'env setup.sh'"]
+    assert f.chamadas[0] == ["bash", "-c", "{ cd '/tmp/meu proj' && bash 'env setup.sh'; } 2>&1"]
     assert f.sinks[0] == (None, ignorar)
+
+
+def test_montar_ambiente_junta_stderr_na_saida(estado, tmp_path):
+    (tmp_path / "setup.sh").write_text("echo um\necho dois >&2\nexit 4\n")
+    a = AdaptadorLocal(estado, tmp_path / "jobs")  # executor de verdade, só bash local
+    linhas = []
+    assert a.montar_ambiente(receita(raiz=str(tmp_path), ambiente="setup.sh"), linhas.append) == 4
+    assert linhas == ["um", "dois"]
 
 
 def test_sessao_sumida_fica_desconhecido(estado, tmp_path):

@@ -66,6 +66,18 @@ def _fora_da_fila(ids: list[str]) -> str:
     )
 
 
+def _script(base: str, script: str) -> str:
+    """Script do usuário no remoto: stderr junto da saída e nunca o código 255.
+
+    O ssh usa 255 para os próprios erros; um script que saísse com 255 seria
+    tomado por recusa da conexão e bloquearia o destino.
+    """
+    return (
+        f"{{ cd {_q(base)} && bash {_q(script)}; }} 2>&1; "
+        'e=$?; [ "$e" -eq 255 ] && e=254; exit "$e"'
+    )
+
+
 def _tail_um(log: str) -> str:
     """`tail -n 1` de um log; com `%a`, do arquivo mais recente que casa."""
     if "%a" not in log:
@@ -200,9 +212,7 @@ class AdaptadorSlurm:
         if not secao.ambiente:
             raise ErroReceita(f"a seção {self.nome!r} não define `ambiente`")
         base = self._base(secao)
-        r = self.conexao.comando(
-            f"cd {_q(base)} && bash {_q(secao.ambiente)}", saida=saida
-        )
+        r = self.conexao.comando(_script(base, secao.ambiente), saida=saida)
         return r.codigo
 
     def submeter(
@@ -234,14 +244,12 @@ class AdaptadorSlurm:
                 )
             nome = os.path.splitext(os.path.basename(secao.job))[0]
         elif secao.submeter:
-            r = self.conexao.comando(
-                f"cd {_q(base)} && bash {_q(secao.submeter)}", saida=saida
-            )
+            r = self.conexao.comando(_script(base, secao.submeter), saida=saida)
             m = _ID_SCRIPT.search(r.saida)
             if not m:
                 raise ErroReceita(
-                    "o script de submissão não imprimiu `fishell-job: <id>`. Saída:\n"
-                    + r.saida
+                    f"o script de submissão saiu com {r.codigo} sem imprimir "
+                    "`fishell-job: <id>`. Saída:\n" + r.saida
                 )
             log_abs = None
             if secao.log:
