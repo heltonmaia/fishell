@@ -365,28 +365,37 @@ que o `setup` das partes anteriores faz) e a chave precisa estar carregada no
 
 ```
 fishell  jobs
-┌ DESTINOS ──────────┐┌ todos os destinos ───────────────────────────────────┐
-│> todos          3  ││  DESTINO  PROJETO  JOB          ESTADO     LOG        │
-│  npad          ●   ││> npad     pose     kp-extract   ● 47/65    === DONE   │
-│  local         ●   ││  local    yolo     yolo-train   ✓ ok       mAP50 0.73 │
-└────────────────────┘└──────────────────────────────────────────────────────┘
-┌ log ao vivo ─────────────────────────────────────────────────────────────────┐
-│ node : gpunode2   GPU 0: NVIDIA A100-SXM4-80GB                               │
-└──────────────────────────────────────────────────────────────────────────────┘
-tab destinos/jobs  enter log cheio  n novo job  m montar  p trazer  c cancelar  q sair
+┌ DESTINOS ──────────┐┌ todos os destinos ─────────────────────────────────────────────┐
+│> todos          3  ││  DESTINO  PROJETO  JOB         ESTADO      TEMPO    LOG        │
+│  npad          ●   ││> npad     pose     kp-extract  ● 47/65 ok  12:30    === DONE   │
+│  local         ●   ││  local    yolo     yolo-train  ✓ ok        1:02:11  mAP50 0.73 │
+└────────────────────┘└────────────────────────────────────────────────────────────────┘
+┌ log ao vivo ─────────────────────────────────────────────────────────────────────────┐
+│ node : gpunode2   GPU 0: NVIDIA A100-SXM4-80GB                                       │
+└──────────────────────────────────────────────────────────────────────────────────────┘
+tab destinos/jobs  enter log cheio  n novo job  m montar  p trazer  c cancelar  r atualizar  q sair
 ```
 
 | tecla | ação |
 | --- | --- |
 | `tab` | alterna o foco entre a lista de destinos e a de jobs |
 | `enter` | abre o log do job em tela cheia (`esc` volta) |
-| `n` | novo job: escolhe o projeto (pela receita), o destino e a partição |
-| `m` | monta o ambiente no destino, para o projeto do job destacado |
+| `n` | abre a janela de ações: projeto (pela receita), destino, partição e array (estes dois só quando a receita usa `job`), a caixa "enviar antes" e os botões **Enviar**, **Montar ambiente**, **Submeter**, **Trazer** e **Fechar** |
+| `m` | abre a mesma janela já no projeto e no destino do job destacado; montar o ambiente é o botão **Montar ambiente** |
 | `p` | traz os resultados do job para a máquina local |
 | `c` | cancela o job (pede confirmação) |
-| `q` | sai |
+| `r` | atualiza todos os destinos agora, inclusive um que parou por falha de autenticação |
+| `q` | sai; com uma ação em andamento, pergunta antes |
 
-O destino `local` atualiza a cada 3 s; o NPAD, a cada 60 s.
+O destino `local` atualiza a cada 3 s; o NPAD, a cada 60 s, e cada destino
+anda sozinho: um NPAD lento não segura o `local`. Se um destino não responde,
+a lista continua com os últimos jobs que se conheciam dele, marcados como
+`(desatualizado)`, e a barra de destinos diz o motivo.
+
+Enquanto uma ação roda, a janela mostra a saída ao vivo (o stderr dos scripts
+também) e não fecha até terminar. `q` no meio pergunta se quer sair mesmo
+assim e, no sim, sai sem esperar: o que já começou (um envio, um script, um
+job) pode terminar sozinho. Ainda não há botão para interromper a ação.
 
 ### Receita do projeto: `fishell.toml`
 
@@ -406,19 +415,27 @@ particao = "gpu-4-a100"
 
 [local]
 ambiente = "setup_env.sh"
-comando  = "python treina.py"
+comando  = "uv run python treina.py"
 ```
 
 - `enviar` e `trazer` são listas de itens `"origem/ -> destino/"`; um texto sem
   ` -> ` vale como o mesmo caminho nos dois lados. Para filtrar, use a forma
   de tabela: `{ de = "videos/", para = "videos/", incluir = ["*.mp4"], excluir = ["*_low.mp4"] }`.
-- `job` aponta um `.sbatch`, que o fishell submete com `sbatch --parsable`.
-  `submeter` aponta um script do projeto que monta o que precisar e chama o
+- `ambiente` é um script rodado com `bash`: no NPAD, a partir da pasta
+  `remoto`; no `local`, a partir da raiz do projeto.
+- `job` aponta um `.sbatch`, que o fishell submete com `sbatch --parsable`. O
+  log do job: com `log` na receita, o fishell passa `-o <log>` ao `sbatch`;
+  sem ele, vale o `#SBATCH --output` do seu `.sbatch` (lido da cópia local) e,
+  na falta dele, o padrão do Slurm, `slurm-<id>.out` na pasta `remoto`
+  (`slurm-<id>_<tarefa>.out` num array).
+- `submeter` aponta um script do projeto que monta o que precisar e chama o
   `sbatch`; ele deve **imprimir uma linha `fishell-job: <id>`** com o id do job,
-  e a receita precisa declarar também o `log`. `job` e `submeter` não se
-  combinam.
-- No destino `local`, `ambiente` e `comando` rodam na pasta do projeto, e o
-  `comando` numa sessão `tmux`.
+  e a receita precisa declarar também o `log`. Partição e array ficam por conta
+  do script. `job` e `submeter` não se combinam.
+- No destino `local`, o `comando` roda numa sessão `tmux` de um servidor só do
+  fishell, sem o seu `tmux.conf` e sem ativar ambiente nenhum: escreva-o
+  completo, por exemplo `uv run python treina.py`. Para acompanhar o job por
+  dentro: `tmux -L fishell attach -t fishell-<id>`.
 - Projetos sem receita aparecem na lista, mas não oferecem enviar, montar,
   submeter nem trazer.
 
@@ -427,14 +444,18 @@ comando  = "python treina.py"
 ```bash
 fishell            # abre o painel de jobs
 fishell menu       # o mesmo
-fishell jobs       # lista os jobs em texto, uma vez, e sai
+fishell jobs       # atualiza todos os destinos, lista os jobs em texto e sai
 fishell vigia      # o vigia de fim de job (normalmente automático)
 fishell --version
 ```
 
 Depois de submeter um job, o fishell inicia o **vigia** sozinho: um processo
 que acompanha os jobs ativos, avisa com `notify-send` quando um termina ou
-falha e sai quando não há mais nenhum.
+falha e sai quando não há mais nenhum. Ele não sobrevive a um reboot nem ao
+fim da sessão, e por isso o painel (ao abrir) e o `fishell jobs` o iniciam de
+novo se ainda houver job ativo ou aviso pendente. Se todos os destinos com job
+ativo ficarem 30 minutos sem responder, ele avisa ("vigia parou: npad sem
+resposta") e sai; volta na próxima vez que o painel abrir.
 
 ### Configuração e estado
 
@@ -468,12 +489,21 @@ Os dois lugares podem ser trocados com `FISHELL_CONFIG_DIR` e `FISHELL_STATE_DIR
 - Uma só conexão SSH multiplexada serve para tudo, com no máximo dois canais
   (um para transferências, outro para consultas curtas).
 - Se o servidor recusar a conexão, o destino fica **30 minutos** sem nenhuma
-  nova tentativa. Falha de autenticação para a atualização automática até você
-  forçar uma nova.
+  nova tentativa. O bloqueio fica gravado em
+  `~/.local/state/fishell/ctl/<alias>.bloqueio`, e o painel, o vigia e o
+  `fishell jobs` respeitam o mesmo. Um erro que nem chegou ao cluster (sem
+  rede, nome que não resolve, tempo esgotado ao conectar) espera só 2 minutos.
+- Falha de autenticação para a atualização automática do painel até você
+  forçar uma nova com a tecla `r`. O `fishell jobs` sempre consulta de novo.
+- Um script do projeto (ambiente ou submeter) que sai com 255 aparece como 254:
+  para o `ssh`, 255 quer dizer erro de conexão.
+- Um job que terminou sem ninguém olhar (o painel ficou dias fechado) é
+  conferido no `sacct` sem janela de tempo e sai da lista de ativos.
 - `rsync` sempre com `-a`, nunca com `--delete` nem `--remove-source-files`. O
   fishell **não apaga nada no cluster**.
-- Jobs do `local` rodam em sessões `tmux` chamadas `fishell-<id>`; jobs com mais
-  de 24 h continuam na lista enquanto estiverem ativos.
+- Jobs do `local` rodam em sessões `tmux` chamadas `fishell-<id>`, num servidor
+  só do fishell (`tmux -L fishell ls` lista as sessões); jobs com mais de 24 h
+  continuam na lista enquanto estiverem ativos.
 
 ---
 

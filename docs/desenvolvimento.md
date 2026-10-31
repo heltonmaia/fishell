@@ -202,16 +202,33 @@ src/python/tests/   pytest; fixtures/ guarda saídas gravadas das ferramentas
 ### Camadas
 
 - **Núcleo** (`core/`): não conhece SSH nem Slurm. `modelos` define `Job`,
-  `Receita`, `Recurso`; `receita` lê o `fishell.toml`; `config` lê o
-  `destinos.toml`; `estado` é o SQLite dos jobs iniciados pelo fishell;
-  `hub` reúne os adaptadores, aplica os intervalos de atualização e entrega a
-  visão (jobs e avisos por destino); `montagem` liga tudo (`montar_hub`).
+  `Receita`, `Recurso`; `receita` lê o `fishell.toml`; `config` lê e
+  valida o `destinos.toml` (erro vira `ErroConfig`, uma linha no stderr e
+  saída 1); `estado` é o SQLite dos jobs iniciados pelo fishell; `hub` reúne
+  os adaptadores, aplica os intervalos de atualização e entrega a visão (jobs
+  e avisos por destino); `montagem` liga tudo (`montar_hub`).
+- **Hub por destino**: `atualizar_destino(nome, forcar)` consulta um destino
+  só e `visao()` devolve o retrato sem consultar; a TUI roda uma thread por
+  destino, cada uma com sua trava, e um NPAD lento não segura o `local`.
+  `atualizar()` (todos, em sequência) serve ao vigia e ao `fishell jobs`. Num
+  erro, o destino mantém a última lista conhecida e os jobs ativos dela saem
+  com `motivo = "(desatualizado)"`.
 - **Adaptadores** (`adapters/`): um por tipo de destino. `slurm` fala com o NPAD
   por `conexao` (a conexão SSH única); `slurm_saidas` só interpreta o texto de
   `squeue`, `sinfo` e `sacct`; `local` roda jobs em `tmux`.
 - **Frentes**: a TUI (`tui/`) e a linha de comando (`cli.py`) chamam o `Hub`,
   nunca um adaptador direto. O vigia (`vigia.py`) é outra frente: não carrega a
   interface.
+- **Threads da TUI**: todo trabalho de fundo (atualizações, logs, ações, o
+  vigia) passa por `FishellApp._em_fundo`, threads daemon e não workers do
+  Textual, que rodam no executor padrão do asyncio e prendem a saída até
+  terminar. A tela muda só pela `_na_principal`. Ações do usuário entram com
+  `acao=True`: enquanto houver uma, o modal não fecha e `q` pede confirmação.
+  Nos testes, `_esperar` espera os workers e `app.em_fundo()`.
+- **Vigia**: nasce no submeter e também pelo `Hub.garantir_vigia_se_preciso`
+  (painel ao abrir e `fishell jobs`), porque não sobrevive a reboot nem a
+  logout. Sai sozinho sem job ativo; com todos os destinos ativos 30 min sem
+  resposta, avisa "vigia parou: <destino> sem resposta" e sai 0.
 
 ### Interface `Adaptador`
 
@@ -236,12 +253,12 @@ por nome de destino (`[npad]`, `[local]`), com as chaves:
 | --- | --- | --- |
 | `remoto` | texto | pasta do projeto no destino (aceita `$USER`) |
 | `enviar`, `trazer` | lista | itens de transferência |
-| `ambiente` | texto | script que monta o ambiente, relativo a `remoto` |
+| `ambiente` | texto | script que monta o ambiente; relativo a `remoto` no slurm e à raiz do projeto no local |
 | `job` | texto | `.sbatch` submetido com `sbatch --parsable` |
 | `submeter` | texto | script do projeto que chama o `sbatch` |
-| `log` | texto | caminho do log do job |
-| `comando` | texto | comando do destino `local` |
-| `particao` | texto | partição padrão |
+| `log` | texto | caminho do log do job (com `job`, opcional: ver abaixo) |
+| `comando` | texto | comando do destino `local` (autocontido: sem ambiente ativado) |
+| `particao` | texto | partição padrão (só no modo `job`) |
 
 Regras que o `receita.py` impõe: chave desconhecida é erro; `job` e `submeter`
 são exclusivos; `submeter` exige `log`. Um item de transferência é
@@ -251,7 +268,30 @@ uma tabela `{de, para, incluir, excluir}`.
 **Convenção do `submeter`:** o script roda no remoto e precisa imprimir uma
 linha `fishell-job: <id>` com o id do job Slurm. O fishell usa esse id para
 acompanhar e cancelar, e o `log` da receita para mostrar a saída. Quem constrói
-a lista de entradas e o tamanho do array fica por conta do script.
+a lista de entradas, a partição e o tamanho do array fica por conta do script
+(a janela de ações não os mostra nesse modo).
+
+**Log no modo `job`:** com `log` na receita, o `sbatch` recebe `-o <log>` (e a
+pasta é criada antes). Sem ele, o fishell não passa `-o`: lê o `#SBATCH
+-o/--output` (e `-J/--job-name`, `-D/--chdir`, `-a/--array`) do `.sbatch`
+local, achado pelo mapa do `enviar` ou no mesmo caminho relativo, e registra
+esse caminho, relativo a `remoto` (ou ao `--chdir`), com `%j`/`%A` trocados
+pelo id, `%x` pelo nome do job e `%a` mantido para o `tail`. Sem `--output`,
+vale o padrão do SLURM: `slurm-%j.out` (array: `slurm-%A_%a.out`) em
+`remoto`.
+
+**Scripts do usuário no remoto** (`ambiente`, `submeter`) rodam como
+`{ cd <remoto> && bash <script>; } 2>&1; e=$?; [ "$e" -eq 255 ] && e=254;
+exit "$e"`: o stderr chega à saída ao vivo, e um 255 do script não é lido
+como recusa da conexão (para o `ssh`, 255 é erro dele). No local, o ambiente
+roda com `2>&1` também.
+
+**Jobs locais** rodam num servidor tmux só do fishell, `tmux -L fishell -f
+/dev/null` (em toda chamada, para o `tmux.conf` do usuário não valer; um
+`destroy-unattached` mataria o job ao nascer). Para entrar: `tmux -L fishell
+attach -t fishell-<id>`. O `listar_jobs` lê o registro antes das sessões e o
+`cancelar` grava CANCELADO antes do `kill-session`, para outro processo não
+ver "sessão sumiu" no meio.
 
 ### Regras inegociáveis (NPAD)
 
@@ -260,15 +300,26 @@ a lista de entradas e o tamanho do array fica por conta do script.
   para consultas curtas. Se o servidor recusar o segundo, o fishell cai para
   modo serial.
 - **Conexão recusada** (`ssh` sai com 255 sem "Permission denied") bloqueia o
-  destino por **30 minutos**, sem nova tentativa. "Permission denied" é falha de
-  autenticação: para a atualização automática até uma atualização forçada.
+  destino por **30 minutos**, sem nova tentativa. O bloqueio fica em
+  `ctl/<alias>.bloqueio` (a hora de liberar, em ISO), e o painel, o vigia e o
+  `fishell jobs` (processos diferentes) respeitam o mesmo arquivo; vencido, é
+  ignorado. Erro que nem chegou ao cluster (DNS, rede inalcançável, alias
+  desconhecido, `ControlPath too long`, tempo esgotado no connect, que só
+  acontece sem mestre vivo) espera **2 minutos**; erro desconhecido, 30.
+  "Permission denied" é falha de autenticação: para a atualização automática
+  até uma atualização forçada (tecla `r` no painel; o `fishell jobs` sempre
+  força a sua).
+- **Job que terminou sem ser visto:** o `listar_jobs` pede, no mesmo comando
+  remoto, `sacct -j` sem janela de tempo para os jobs registrados que saíram
+  do `squeue` (o filtro roda no remoto, sobre a saída do `squeue` guardada
+  em `$q`). `DEADLINE` e `REVOKED` contam como falha.
 - **Nada apaga no cluster.** `rsync` sempre `-a -s`; nunca `--delete` nem
   `--remove-source-files`; nenhum `rm` remoto.
 - Intervalos: `local` a cada 3 s, NPAD a cada 60 s.
 - O fishell não guarda credencial. Config em `~/.config/fishell/`
   (`FISHELL_CONFIG_DIR`), estado em `~/.local/state/fishell/`
-  (`FISHELL_STATE_DIR`: `estado.db`, `jobs/`, `ctl/`, `vigia.lock`,
-  `vigia.log`).
+  (`FISHELL_STATE_DIR`: `estado.db`, `jobs/`, `ctl/` com os sockets e os
+  `<alias>.bloqueio`, `vigia.lock`, `vigia.log`).
 - Limitação conhecida: um `FISHELL_STATE_DIR` longo estoura o limite de 108
   bytes do caminho do socket SSH (`ctl/`). O caminho padrão cabe.
 
