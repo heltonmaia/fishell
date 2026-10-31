@@ -15,12 +15,16 @@ from textual.widgets import DataTable, Footer, Header, OptionList, RichLog
 from textual.widgets.option_list import Option
 
 from .. import textos
+from .acoes import ConfirmarScreen, NovoJobScreen, TrazerScreen
 from ..core.hub import Hub, Visao
 from ..core.modelos import EstadoJob, Job
 
 LINHAS_LOG = 40
 LINHAS_LOG_CHEIO = 400
 LARGURA_LINHA = 24
+_ACOES_DO_PAINEL = frozenset(
+    {"abrir_log", "alternar_foco", "novo_job", "montar", "trazer", "cancelar", "quit"}
+)
 _ATIVOS = (("●", EstadoJob.RODANDO), ("◌", EstadoJob.FILA))
 
 
@@ -92,6 +96,10 @@ class FishellApp(App):
     BINDINGS = [
         Binding("tab", "alternar_foco", textos.TUI_TECLA_ALTERNAR, priority=True),
         Binding("enter", "abrir_log", textos.TUI_TECLA_LOG, priority=True),
+        Binding("n", "novo_job", textos.TUI_TECLA_NOVO),
+        Binding("m", "montar", textos.TUI_TECLA_MONTAR),
+        Binding("p", "trazer", textos.TUI_TECLA_TRAZER),
+        Binding("c", "cancelar", textos.TUI_TECLA_CANCELAR),
         Binding("q", "quit", textos.TUI_TECLA_SAIR),
     ]
 
@@ -248,7 +256,9 @@ class FishellApp(App):
         self._checar_log()
 
     def check_action(self, action: str, parameters) -> bool | None:
-        if action in ("abrir_log", "alternar_foco") and isinstance(self.screen, LogScreen):
+        # só a tela de jobs usa as teclas do app; no resto (modais, log cheio) o
+        # tab/enter são do campo e as ações do próprio Textual (focus_next) seguem
+        if action in _ACOES_DO_PAINEL and len(self.screen_stack) > 1:
             return False
         return True
 
@@ -256,6 +266,53 @@ class FishellApp(App):
         job = self._job_destacado()
         if job is not None:
             self.push_screen(LogScreen(self.hub, job))
+
+    # --- ações ---------------------------------------------------------
+    def _com_job(self) -> Job | None:
+        job = self._job_destacado()
+        if job is None:
+            self.notify(textos.ACAO_SEM_JOB)
+        return job
+
+    def _receita_do_job(self, job: Job) -> bool:
+        r = next((r for r in self._visao.receitas if r.nome == job.projeto), None)
+        if job.projeto is None or r is None or job.destino not in r.secoes:
+            self.notify(textos.ACAO_JOB_EXTERNO)
+            return False
+        return True
+
+    def action_novo_job(self) -> None:
+        self.push_screen(NovoJobScreen(self.hub, self._visao))
+
+    def action_montar(self) -> None:
+        job = self._com_job()
+        if job is not None and self._receita_do_job(job):
+            self.push_screen(NovoJobScreen(self.hub, self._visao, job.projeto, job.destino))
+
+    def action_trazer(self) -> None:
+        job = self._com_job()
+        if job is not None and self._receita_do_job(job):
+            self.push_screen(TrazerScreen(self.hub, job.projeto, job.destino))
+
+    def action_cancelar(self) -> None:
+        job = self._com_job()
+        if job is None:
+            return
+        pergunta = textos.ACAO_CONFIRMAR_CANCELAR.format(nome=job.nome, destino=job.destino)
+        self.push_screen(ConfirmarScreen(pergunta), lambda sim: self._cancelar(job) if sim else None)
+
+    def _cancelar(self, job: Job) -> None:
+        self._rodar_cancelar(job)
+
+    @work(thread=True, group="cancelar")
+    def _rodar_cancelar(self, job: Job) -> None:
+        try:
+            self.hub.cancelar(job.destino, job.id)
+        except Exception as e:  # noqa: BLE001
+            self._na_principal(self._falha, textos.ACAO_ERRO.format(erro=e))
+        else:
+            self._na_principal(self.notify, textos.ACAO_CANCELADO.format(nome=job.nome, destino=job.destino))
+            self._na_principal(self.atualizar_agora)
 
     # --- log ao vivo ---------------------------------------------------
     def _checar_log(self) -> None:

@@ -3,3 +3,9 @@
 #jobs { width: 1fr; height: 100%; border: round $primary; }
 #log { height: 10; border: round $primary; }
 #log-cheio { height: 1fr; border: round $primary; }
+NovoJobScreen, TrazerScreen, ConfirmarScreen { align: center middle; }
+.caixa { width: 60; height: auto; max-height: 90%; border: round $primary; background: $surface; padding: 0 1; }
+.caixa.largo { width: 80; }
+.botoes { height: auto; }
+.botoes Button { margin-right: 1; }
+.caixa RichLog { height: 10; border: round $primary; }
