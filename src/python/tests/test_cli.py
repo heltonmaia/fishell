@@ -16,6 +16,9 @@ def test_jobs_em_texto(monkeypatch, capsys):
     from fishell.core.modelos import EstadoJob, Job
 
     class HubFalso:
+        def garantir_vigia_se_preciso(self):
+            return None
+
         def atualizar(self, forcar=False):
             assert forcar is True
             return Visao(
@@ -35,3 +38,31 @@ def test_jobs_em_texto(monkeypatch, capsys):
     assert linhas[1] == "npad  demo  treino  ✓ ok  00:01:02  fim"
     assert linhas[2] == "local    x *  ● rodando  5s"
     assert linhas[-1] == "aviso npad: sem acesso"
+
+
+def test_jobs_garante_o_vigia(monkeypatch, capsys):
+    from fishell import cli
+    from fishell.core.hub import Visao
+
+    chamadas = []
+
+    class HubFalso:
+        erro = None
+
+        def atualizar(self, forcar=False):
+            chamadas.append("atualizar")
+            return Visao()
+
+        def garantir_vigia_se_preciso(self):
+            chamadas.append("vigia")
+            return self.erro
+
+    h = HubFalso()
+    monkeypatch.setattr(cli, "_hub", lambda: h)
+    assert main(["jobs"]) == 0
+    assert chamadas == ["atualizar", "vigia"]
+    assert capsys.readouterr().err == ""
+    h.erro = OSError("sem permissão")
+    assert main(["jobs"]) == 0
+    err = capsys.readouterr().err
+    assert "sem permissão" in err and len(err.strip().splitlines()) == 1

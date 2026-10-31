@@ -174,8 +174,23 @@ class Hub:
             job_id = ad.submeter(r, particao, array, saida)
         finally:
             self._vencer(destino)
-        self._iniciar_vigia()
+        try:
+            self._iniciar_vigia()
+        except Exception as e:  # noqa: BLE001 - o job já foi submetido
+            saida(textos.HUB_VIGIA_NAO_INICIOU.format(erro=e))
         return job_id
+
+    def garantir_vigia_se_preciso(self) -> OSError | None:
+        """Inicia o vigia se há job ativo ou aviso pendente (depois de um reboot, por ex.).
+
+        Devolve o OSError que impediu de iniciá-lo, em vez de levantar.
+        """
+        try:
+            if self.estado.ativos() or self.estado.pendentes_de_aviso():
+                self._iniciar_vigia()
+        except OSError as e:
+            return e
+        return None
 
     def cancelar(self, destino: str, job_id: str) -> None:
         ad = self._adaptador(destino, "cancelar")

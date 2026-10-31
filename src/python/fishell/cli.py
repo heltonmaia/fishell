@@ -1,4 +1,5 @@
 import argparse
+import sys
 import time
 
 from fishell import __version__, textos, vigia
@@ -40,11 +41,15 @@ def _vigia() -> int:
 
 
 def _jobs() -> int:
-    visao = _hub().atualizar(forcar=True)
+    hub = _hub()
+    visao = hub.atualizar(forcar=True)
     for celulas in (textos.TUI_COLUNAS, *(linha_job(j) for j in visao.jobs)):
         print("  ".join(celulas).rstrip())
     for destino, texto in visao.avisos.items():
         print(textos.JOBS_AVISO.format(destino=destino, texto=texto))
+    erro = hub.garantir_vigia_se_preciso()
+    if erro is not None:
+        print(textos.HUB_VIGIA_NAO_INICIOU.format(erro=erro), file=sys.stderr)
     return 0
 
 

@@ -289,3 +289,36 @@ def test_cli_nao_carrega_textual_no_import():
         capture_output=True, text=True,
     )
     assert r.stdout.strip() == "False"
+
+
+# --- F3: o painel reinicia o vigia ao abrir -----------------------------
+async def test_painel_garante_o_vigia_ao_abrir(tmp_path):
+    chamadas = []
+    estado = Estado(tmp_path / "e.db")
+    estado.registrar("npad", "1", "pose", "kp", None, None)
+    hub = Hub({"npad": AdaptadorFalso(nome="npad")}, estado, [],
+              iniciar_vigia=lambda: chamadas.append(1))
+    app = FishellApp(hub)
+    async with app.run_test(size=(100, 30)) as pilot:
+        await _esperar(app, pilot)
+        await _esperar(app, pilot)
+        assert chamadas == [1]
+
+
+async def test_painel_com_vigia_quebrado_avisa_e_segue(tmp_path):
+    def quebra():
+        raise OSError("sem permissão")
+
+    estado = Estado(tmp_path / "e.db")
+    estado.registrar("npad", "1", "pose", "kp", None, None)
+    hub = Hub({"npad": AdaptadorFalso(nome="npad")}, estado, [], iniciar_vigia=quebra)
+    app = FishellApp(hub)
+    avisos = []
+    app.notify = lambda msg, **kw: avisos.append((msg, kw.get("severity")))
+    async with app.run_test(size=(100, 30)) as pilot:
+        await _esperar(app, pilot)
+        await _esperar(app, pilot)
+        assert app.is_running
+        assert [(m, s) for m, s in avisos if "sem permissão" in m] == [
+            (textos.HUB_VIGIA_NAO_INICIOU.format(erro="sem permissão"), "warning")
+        ]

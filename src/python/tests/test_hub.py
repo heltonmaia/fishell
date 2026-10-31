@@ -241,3 +241,40 @@ def test_visao_expoe_indisponivel_e_sem_acesso(tmp_path):
     v = h.atualizar()
     assert v.indisponivel_ate == {"npad": ate}
     assert v.sem_acesso == frozenset({"outro"})
+
+
+# --- F3: vigia reiniciado quando preciso ------------------------------
+def test_garantir_vigia_so_quando_ha_o_que_vigiar(tmp_path):
+    chamadas = []
+    h = hub(tmp_path, vigia=lambda: chamadas.append(1), a=AdaptadorFalso("a"))
+    assert h.garantir_vigia_se_preciso() is None
+    assert chamadas == []
+    h.estado.registrar("a", "1", "proj", "n", None, None)
+    assert h.garantir_vigia_se_preciso() is None
+    assert chamadas == [1]
+    h.estado.atualizar("a", "1", EstadoJob.OK)  # terminou, aviso pendente
+    h.garantir_vigia_se_preciso()
+    assert chamadas == [1, 1]
+    h.estado.marcar_notificado("a", "1")
+    h.garantir_vigia_se_preciso()
+    assert chamadas == [1, 1]
+
+
+def test_garantir_vigia_engole_e_devolve_oserror(tmp_path):
+    def quebra():
+        raise PermissionError("sem permissão em vigia.lock")
+
+    h = hub(tmp_path, vigia=quebra, a=AdaptadorFalso("a"))
+    h.estado.registrar("a", "1", "proj", "n", None, None)
+    erro = h.garantir_vigia_se_preciso()
+    assert isinstance(erro, OSError) and "vigia.lock" in str(erro)
+
+
+def test_submeter_com_vigia_quebrado_devolve_o_id(tmp_path):
+    def quebra():
+        raise OSError("python sumiu")
+
+    linhas = []
+    h = hub(tmp_path, vigia=quebra, a=AdaptadorFalso("a", id_submetido="42"))
+    assert h.submeter("proj", "a", saida=linhas.append) == "42"
+    assert any("python sumiu" in l for l in linhas)

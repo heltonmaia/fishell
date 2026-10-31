@@ -118,6 +118,20 @@ class FishellApp(App):
         self._montar_destinos()
         self.set_interval(1.0, self.atualizar_agora)
         self.atualizar_agora()
+        self._garantir_vigia()
+
+    @work(thread=True, group="vigia")
+    def _garantir_vigia(self) -> None:
+        # o vigia não sobrevive a um reboot ou logout: o painel o reinicia ao abrir
+        try:
+            erro = self.hub.garantir_vigia_se_preciso()
+        except Exception as e:  # noqa: BLE001 - nada derruba a interface
+            erro = e
+        if erro is not None:
+            self._na_principal(self._aviso, textos.HUB_VIGIA_NAO_INICIOU.format(erro=erro))
+
+    def _aviso(self, mensagem: str) -> None:
+        self.notify(mensagem, severity="warning")
 
     # --- atualização ---------------------------------------------------
     def atualizar_agora(self) -> None:
