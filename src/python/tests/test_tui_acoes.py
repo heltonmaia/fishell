@@ -47,7 +47,11 @@ def _hub(tmp_path, atraso=0.0, receitas=None, jobs=None):
 
 async def _esperar(app, pilot):
     await pilot.pause()
-    await app.workers.wait_for_complete()
+    for _ in range(500):
+        await app.workers.wait_for_complete()
+        if not app.em_fundo():
+            break
+        await pilot.pause(0.01)
     await pilot.pause()
 
 
@@ -205,8 +209,8 @@ async def test_botoes_desabilitados_durante_a_acao(tmp_path):
 async def test_enviar_longo_nao_bloqueia_atualizacao(tmp_path):
     hub = _hub(tmp_path, atraso=3.0)
     contagem = []
-    original = hub.atualizar
-    hub.atualizar = lambda forcar=False: (contagem.append(1), original(forcar))[1]
+    original = hub.atualizar_destino
+    hub.atualizar_destino = lambda nome, forcar=False: (contagem.append(1), original(nome, forcar))[1]
     app = FishellApp(hub)
     async with app.run_test(size=(100, 40)) as pilot:
         tela = await _abrir_modal(app, pilot)

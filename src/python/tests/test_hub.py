@@ -11,6 +11,7 @@ from fishell.core.estado import Estado
 from fishell.core.hub import Hub
 from fishell.core.modelos import EstadoJob, Job, Receita, Recurso
 from fishell.core.montagem import montar_hub
+from fishell import textos
 from tests.fakes import AdaptadorFalso
 
 T0 = datetime(2026, 10, 31, 10, 0)
@@ -69,17 +70,53 @@ def test_erro_generico_vira_aviso(tmp_path):
     assert "quebrou" in v.avisos["a"]
 
 
-def test_destino_com_erro_nao_contribui(tmp_path):
+def test_destino_com_erro_mantem_os_ultimos_jobs_marcados(tmp_path):
     r = Relogio()
-    a = AdaptadorFalso("a", jobs=[job("a", "1")], recursos=[Recurso("x")])
+    rodando = Job("a", "1", "n", EstadoJob.RODANDO, ultima_linha="epoca 3")
+    feito = Job("a", "2", "n", EstadoJob.OK, ultima_linha="fim")
+    a = AdaptadorFalso("a", jobs=[rodando, feito], recursos=[Recurso("x")])
     h = hub(tmp_path, r, a=a)
-    assert h.atualizar().jobs
+    assert h.atualizar().jobs == [rodando, feito]
     a.erro = RuntimeError("x")
     v = h.atualizar(forcar=True)
-    assert v.jobs == [] and v.recursos["a"] == [] and "a" in v.avisos
+    assert "a" in v.avisos
+    por_id = {j.id: j for j in v.jobs}
+    assert por_id["1"].estado == EstadoJob.RODANDO
+    assert por_id["1"].motivo == textos.HUB_DESATUALIZADO and por_id["1"].ultima_linha == ""
+    assert por_id["2"] == feito  # terminal não envelhece
+    assert v.recursos["a"] == [Recurso("x")]
+    v = h.atualizar(forcar=True)  # segundo erro: continua a mesma lista
+    assert {j.id for j in v.jobs} == {"1", "2"}
     a.erro = None
     v = h.atualizar(forcar=True)
-    assert v.jobs and "a" not in v.avisos
+    assert v.jobs == [rodando, feito] and "a" not in v.avisos
+
+
+def test_atualizar_destino_nao_espera_outro_destino(tmp_path):
+    entrou, soltar = threading.Event(), threading.Event()
+
+    class Lento(AdaptadorFalso):
+        def listar_jobs(self):
+            entrou.set()
+            assert soltar.wait(5)
+            return super().listar_jobs()
+
+    npad = Lento("npad", jobs=[job("npad", "7")])
+    local = AdaptadorFalso("local", jobs=[job("local", "1")], intervalo=3)
+    h = hub(tmp_path, npad=npad, local=local)
+    t = threading.Thread(target=h.atualizar_destino, args=("npad",))
+    t.start()
+    try:
+        assert entrou.wait(5)
+        assert h.atualizar_destino("local") is True
+        assert h.atualizar_destino("local") is False  # dentro do intervalo
+        assert h.atualizar_destino("local", forcar=True) is True
+        assert h.atualizar_destino("npad") is False  # em andamento
+        assert [j.id for j in h.visao().jobs] == ["1"]
+    finally:
+        soltar.set()
+        t.join(5)
+    assert {j.id for j in h.visao().jobs} == {"1", "7"}
 
 
 def test_ordem_ativos_primeiro(tmp_path):

@@ -10,6 +10,7 @@ HUB_INDISPONIVEL_ATE = "indisponível até {hora}"
 HUB_SEM_ACESSO = "sem acesso: chave não aceita ou ssh-agent ausente"
 HUB_ERRO_CONSULTA = "erro ao consultar: {erro}"
 HUB_VIGIA_NAO_INICIOU = "aviso: o vigia não iniciou ({erro})"
+HUB_DESATUALIZADO = "(desatualizado)"
 
 # --- vigia ---
 VIGIA_TERMINOU = "{nome} terminou: {estado}"

@@ -5,7 +5,7 @@ from __future__ import annotations
 import threading
 import time
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 
 from .. import textos
@@ -51,38 +51,55 @@ class Hub:
         self._sem_acesso: set[str] = set()
         self._indisp: dict[str, datetime] = {}
         self._sujos: set[str] = set()
+        self._velhos: set[str] = set()  # última consulta falhou: jobs da anterior
 
     # --- consulta ----------------------------------------------------
     def atualizar(self, forcar: bool = False) -> Visao:
-        for nome, ad in self.adaptadores.items():
-            with self._trava:
-                if forcar:
-                    self._sem_acesso.discard(nome)
-                if nome in self._em_voo or nome in self._sem_acesso:
-                    continue
-                ultima = self._ultima.get(nome)
-                if not forcar and ultima is not None and self._relogio() - ultima < ad.intervalo:
-                    continue
-                self._em_voo.add(nome)
-                self._sujos.discard(nome)
-            jobs, recursos, aviso, auth, ate = self._consultar(ad)
-            with self._trava:
-                self._em_voo.discard(nome)
-                if nome not in self._sujos:
-                    self._ultima[nome] = self._relogio()
+        """Consulta, em sequência, os destinos vencidos (vigia e `fishell jobs`)."""
+        for nome in self.adaptadores:
+            self.atualizar_destino(nome, forcar)
+        return self.visao()
+
+    def atualizar_destino(self, nome: str, forcar: bool = False) -> bool:
+        """Consulta um destino se ele venceu; True se consultou.
+
+        Cada destino anda sozinho: a tela chama um por thread, e um NPAD lento
+        não segura o `local`.
+        """
+        ad = self.adaptadores[nome]
+        with self._trava:
+            if forcar:
+                self._sem_acesso.discard(nome)
+            if nome in self._em_voo or nome in self._sem_acesso:
+                return False
+            ultima = self._ultima.get(nome)
+            if not forcar and ultima is not None and self._relogio() - ultima < ad.intervalo:
+                return False
+            self._em_voo.add(nome)
+            self._sujos.discard(nome)
+        jobs, recursos, aviso, auth, ate = self._consultar(ad)
+        with self._trava:
+            self._em_voo.discard(nome)
+            if nome not in self._sujos:
+                self._ultima[nome] = self._relogio()
+            if aviso:
+                # erro: fica a última lista conhecida, marcada como desatualizada
+                self._jobs.setdefault(nome, [])
+                self._recursos.setdefault(nome, [])
+                self._velhos.add(nome)
+                self._avisos[nome] = aviso
+            else:
                 self._jobs[nome] = jobs
                 self._recursos[nome] = recursos
-                if ate is not None:
-                    self._indisp[nome] = ate
-                else:
-                    self._indisp.pop(nome, None)
-                if aviso:
-                    self._avisos[nome] = aviso
-                else:
-                    self._avisos.pop(nome, None)
-                if auth:
-                    self._sem_acesso.add(nome)
-        return self._visao()
+                self._velhos.discard(nome)
+                self._avisos.pop(nome, None)
+            if ate is not None:
+                self._indisp[nome] = ate
+            else:
+                self._indisp.pop(nome, None)
+            if auth:
+                self._sem_acesso.add(nome)
+        return True
 
     @staticmethod
     def _consultar(ad: Adaptador):
@@ -95,9 +112,18 @@ class Hub:
         except Exception as e:  # noqa: BLE001 - nada pode derrubar a interface
             return [], [], textos.HUB_ERRO_CONSULTA.format(erro=e), False, None
 
-    def _visao(self) -> Visao:
+    def visao(self) -> Visao:
+        """Retrato do que se sabe agora, sem consultar ninguém."""
         with self._trava:
-            jobs = [j for js in self._jobs.values() for j in js]
+            jobs = []
+            for nome, js in self._jobs.items():
+                if nome in self._velhos:
+                    js = [
+                        j if j.estado in TERMINAIS
+                        else replace(j, ultima_linha="", motivo=textos.HUB_DESATUALIZADO)
+                        for j in js
+                    ]
+                jobs.extend(js)
             jobs.sort(key=lambda j: (j.estado in TERMINAIS, j.destino, j.id))
             return Visao(
                 jobs=jobs,

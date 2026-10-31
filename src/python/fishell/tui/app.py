@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import contextvars
 import re
+import threading
 import time
 from pathlib import Path
 
@@ -95,7 +97,9 @@ class FishellApp(App):
         self.hub = hub
         self._visao = Visao()
         self._filtro: str | None = None  # None = todos
-        self._atualizando = False
+        self._trava_fundo = threading.Lock()
+        self._fundo: set[threading.Thread] = set()
+        self._em_voo: set[str] = set()  # destinos com atualização em andamento
         self._log_chave: str | None = None
         self._log_t = 0.0
         self._linhas: list[tuple] | None = None
@@ -133,25 +137,58 @@ class FishellApp(App):
     def _aviso(self, mensagem: str) -> None:
         self.notify(mensagem, severity="warning")
 
-    # --- atualização ---------------------------------------------------
-    def atualizar_agora(self) -> None:
-        if self._atualizando:
-            return
-        self._atualizando = True
-        self._atualizar()
+    # --- trabalho em segundo plano -------------------------------------
+    def _em_fundo(self, fn, *args) -> None:
+        """Roda fn(*args) numa thread daemon: sair nunca espera por ela.
 
-    @work(thread=True, exclusive=True, group="atualizar")
-    def _atualizar(self) -> None:
+        As atualizações da tela voltam pela _na_principal, como nos workers.
+        """
+        contexto = contextvars.copy_context()  # o `self.app` dos widgets vem daqui
+
+        def alvo() -> None:
+            try:
+                contexto.run(fn, *args)
+            except Exception as e:  # noqa: BLE001 - nada derruba a interface
+                self._avisar_erro(e)
+            finally:
+                with self._trava_fundo:
+                    self._fundo.discard(threading.current_thread())
+
+        t = threading.Thread(target=alvo, daemon=True, name=f"fishell-{fn.__name__}")
+        with self._trava_fundo:
+            self._fundo.add(t)
+        t.start()
+
+    def em_fundo(self) -> bool:
+        """Há thread de fundo em andamento (os testes esperam por elas)."""
+        with self._trava_fundo:
+            return bool(self._fundo)
+
+    # --- atualização ---------------------------------------------------
+    def atualizar_agora(self, forcar: bool = False) -> None:
+        """Uma atualização por destino, cada uma na sua thread e com sua trava."""
+        for nome in self.hub.adaptadores:
+            with self._trava_fundo:
+                if nome in self._em_voo:
+                    continue
+                self._em_voo.add(nome)
+            self._em_fundo(self._atualizar, nome, forcar)
+
+    def _atualizar(self, nome: str, forcar: bool) -> None:
         try:
-            visao = self.hub.atualizar()
+            consultou = self.hub.atualizar_destino(nome, forcar)
         except Exception as e:  # noqa: BLE001 - nada derruba a interface
             self._na_principal(self._falha, textos.TUI_ERRO.format(erro=e))
-        else:
-            self._na_principal(self._aplicar, visao)
+            return
         finally:
-            self._atualizando = False
+            with self._trava_fundo:
+                self._em_voo.discard(nome)
+        if consultou:
+            self._na_principal(self._aplicar, self.hub.visao())
 
     def _na_principal(self, fn, *args) -> None:
+        if not self.is_running:
+            return  # o app já saiu; uma thread de fundo terminou depois
         try:
             self.call_from_thread(fn, *args)
         except RuntimeError as e:

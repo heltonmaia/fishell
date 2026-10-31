@@ -26,7 +26,11 @@ def _celulas(tabela):
 
 async def _esperar(app, pilot):
     await pilot.pause()
-    await app.workers.wait_for_complete()
+    for _ in range(500):
+        await app.workers.wait_for_complete()
+        if not app.em_fundo():
+            break
+        await pilot.pause(0.01)
     await pilot.pause()
 
 
@@ -153,10 +157,10 @@ async def test_log_nao_recarrega_a_cada_tick(tmp_path):
 async def test_erro_no_hub_vira_aviso_sem_derrubar(tmp_path):
     hub = _dois_destinos(tmp_path)
 
-    def quebra(forcar=False):
+    def quebra(nome, forcar=False):
         raise RuntimeError("boom")
 
-    hub.atualizar = quebra
+    hub.atualizar_destino = quebra
     app = FishellApp(hub)
     avisos = []
     app.notify = lambda msg, **kw: avisos.append((msg, kw))
@@ -322,3 +326,41 @@ async def test_painel_com_vigia_quebrado_avisa_e_segue(tmp_path):
         assert [(m, s) for m, s in avisos if "sem permissão" in m] == [
             (textos.HUB_VIGIA_NAO_INICIOU.format(erro="sem permissão"), "warning")
         ]
+
+
+# --- F5: um destino lento não trava os outros ---------------------------
+async def test_npad_travado_nao_para_o_local(tmp_path):
+    import asyncio
+    import threading
+
+    entrou, soltar = threading.Event(), threading.Event()
+
+    class Travado(AdaptadorFalso):
+        def listar_jobs(self):
+            entrou.set()
+            soltar.wait(10)
+            return super().listar_jobs()
+
+    npad = Travado(nome="npad", jobs=[Job("npad", "1", "kp", EstadoJob.RODANDO)])
+    local = AdaptadorFalso(nome="local", intervalo=0.0,
+                           jobs=[Job("local", "9", "yolo", EstadoJob.RODANDO)])
+    app = FishellApp(_hub(tmp_path, npad, local))
+    try:
+        async with app.run_test(size=(100, 30)) as pilot:
+            for _ in range(300):
+                if entrou.is_set():
+                    break
+                await asyncio.sleep(0.01)
+            assert entrou.is_set()
+            for _ in range(400):
+                listados = [c for c in local.chamadas if c[0] == "listar_jobs"]
+                if len(listados) >= 2 and app.query_one("#jobs", DataTable).row_count:
+                    break
+                await pilot.pause(0.01)
+            assert len([c for c in local.chamadas if c[0] == "listar_jobs"]) >= 2
+            assert [l[2] for l in _celulas(app.query_one("#jobs", DataTable))] == ["yolo"]
+            soltar.set()
+            await _esperar(app, pilot)
+            assert len(_celulas(app.query_one("#jobs", DataTable))) == 2
+    finally:
+        soltar.set()
