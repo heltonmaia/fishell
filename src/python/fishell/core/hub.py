@@ -46,6 +46,7 @@ class Hub:
         self._ultima: dict[str, float] = {}
         self._em_voo: set[str] = set()
         self._sem_acesso: set[str] = set()
+        self._sujos: set[str] = set()
 
     # --- consulta ----------------------------------------------------
     def atualizar(self, forcar: bool = False) -> Visao:
@@ -59,10 +60,12 @@ class Hub:
                 if not forcar and ultima is not None and self._relogio() - ultima < ad.intervalo:
                     continue
                 self._em_voo.add(nome)
+                self._sujos.discard(nome)
             jobs, recursos, aviso, auth = self._consultar(ad)
             with self._trava:
                 self._em_voo.discard(nome)
-                self._ultima[nome] = self._relogio()
+                if nome not in self._sujos:
+                    self._ultima[nome] = self._relogio()
                 self._jobs[nome] = jobs
                 self._recursos[nome] = recursos
                 if aviso:
@@ -120,6 +123,8 @@ class Hub:
     def _vencer(self, destino: str) -> None:
         with self._trava:
             self._ultima.pop(destino, None)
+            if destino in self._em_voo:
+                self._sujos.add(destino)
 
     def enviar(self, projeto: str, destino: str, saida: Saida) -> None:
         ad, r = self._preparar(projeto, destino, "enviar")

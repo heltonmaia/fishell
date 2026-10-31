@@ -206,3 +206,25 @@ def test_montar_hub_vigia_padrao_e_dado(tmp_path):
     h = montar_hub(tmp_path / "c", tmp_path / "e", tmp_path, lambda: chamadas.append(1))
     h._iniciar_vigia()
     assert chamadas == [1]
+
+
+def test_acao_durante_consulta_em_andamento_mantem_destino_vencido(tmp_path):
+    entrou, soltar = threading.Event(), threading.Event()
+
+    class Lento(AdaptadorFalso):
+        def listar_jobs(self):
+            if not entrou.is_set():
+                entrou.set()
+                assert soltar.wait(5)
+            return super().listar_jobs()
+
+    lento = Lento("lento", intervalo=60)
+    h = hub(tmp_path, lento=lento)
+    t = threading.Thread(target=h.atualizar)
+    t.start()
+    assert entrou.wait(5)
+    h.cancelar("lento", "1")
+    soltar.set()
+    t.join(5)
+    h.atualizar()
+    assert [c for c, _ in lento.chamadas].count("listar_jobs") == 2
