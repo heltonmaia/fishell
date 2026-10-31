@@ -119,6 +119,8 @@ def test_job_simples_so_no_historico():
     ("COMPLETED", EstadoJob.OK),
     ("TIMEOUT", EstadoJob.FALHOU),
     ("REQUEUED", EstadoJob.DESCONHECIDO),
+    ("DEADLINE", EstadoJob.FALHOU),
+    ("REVOKED", EstadoJob.FALHOU),
 ])
 def test_estados(txt, esp):
     assert estado_slurm(txt) == esp

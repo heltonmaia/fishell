@@ -44,6 +44,8 @@ _ESTADOS = {
     "NODE_FAIL": EstadoJob.FALHOU,
     "BOOT_FAIL": EstadoJob.FALHOU,
     "PREEMPTED": EstadoJob.FALHOU,
+    "DEADLINE": EstadoJob.FALHOU,
+    "REVOKED": EstadoJob.FALHOU,
 }
 
 

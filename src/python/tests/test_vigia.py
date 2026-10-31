@@ -161,3 +161,69 @@ def test_indisponivel_nao_atrasa_outro_destino(tmp_path):
 
 def test_espera_minima_de_um_segundo(tmp_path):
     assert _dormida(tmp_path, {"npad": (60, AGORA + timedelta(seconds=0.5))}) == 1
+
+
+# --- F1: vigia desiste depois de 30 min sem resposta -------------------
+class _Parar(Exception):
+    pass
+
+
+def _vigia_com_relogio(tmp_path, ad_npad, extras=(), limite=200):
+    estado = Estado(tmp_path / "e.db")
+    estado.registrar("npad", "1", "p", "treino", None, None)
+    t = {"s": 0.0}
+    ads = {"npad": ad_npad, **{a.nome: a for a in extras}}
+    hub = Hub(ads, estado, [], relogio=lambda: t["s"])
+    avisos, sonos = [], []
+
+    def agora():
+        return AGORA + timedelta(seconds=t["s"])
+
+    def dormir(s):
+        sonos.append(s)
+        if len(sonos) > limite:
+            raise _Parar("o vigia não desistiu")
+        t["s"] += s
+
+    return estado, hub, avisos, sonos, agora, dormir, t
+
+
+def test_vigia_desiste_depois_de_30_min_sem_resposta(tmp_path):
+    ad = AdaptadorFalso("npad", erro=RuntimeError("sem rota"), intervalo=60)
+    estado, hub, avisos, sonos, agora, dormir, t = _vigia_com_relogio(tmp_path, ad)
+    code = vigia.rodar_vigia(hub, estado, lambda a, b: avisos.append((a, b)), dormir, agora)
+    assert code == 0
+    assert avisos == [("fishell", "vigia parou: npad sem resposta")]
+    assert 30 * 60 <= t["s"] < 32 * 60
+    assert [r.job_id for r in estado.ativos()] == ["1"]  # nada foi inventado
+
+
+def test_vigia_volta_a_contar_quando_o_destino_responde(tmp_path):
+    ad = AdaptadorFalso("npad", erro=RuntimeError("sem rota"), intervalo=60)
+    estado, hub, avisos, sonos, agora, dormir0, t = _vigia_com_relogio(tmp_path, ad)
+
+    def dormir(s):
+        dormir0(s)
+        if 20 * 60 <= t["s"] < 21 * 60:
+            ad.erro = None  # respondeu uma vez aos 20 min
+        elif t["s"] >= 21 * 60:
+            ad.erro = RuntimeError("sem rota")
+
+    vigia.rodar_vigia(hub, estado, lambda a, b: avisos.append((a, b)), dormir, agora)
+    assert avisos == [("fishell", "vigia parou: npad sem resposta")]
+    assert t["s"] >= 51 * 60
+
+
+def test_vigia_nao_desiste_se_outro_destino_ativo_responde(tmp_path):
+    ad = AdaptadorFalso("npad", erro=RuntimeError("sem rota"), intervalo=60)
+    local = AdaptadorFalso("local", intervalo=3)
+    estado, hub, avisos, sonos, agora, dormir, t = _vigia_com_relogio(
+        tmp_path, ad, extras=[local], limite=1000
+    )
+    estado.registrar("local", "9", "p", "local", None, None)
+    try:
+        vigia.rodar_vigia(hub, estado, lambda a, b: avisos.append((a, b)), dormir, agora)
+    except _Parar:
+        pass
+    assert avisos == []
+    assert t["s"] > 30 * 60

@@ -36,6 +36,7 @@ from .slurm_saidas import (
 
 SEP_SACCT = "@@fishell-separador-sacct-7f3a9c@@"
 SEP_LOGS = "@@fishell-separador-logs-7f3a9c@@"
+SEP_ANTIGOS = "@@fishell-separador-antigos-7f3a9c@@"
 MARCA_LOG = "@@fishell-log "
 LOG_EXTERNO = "(log indisponível para job externo)"
 _ID_SCRIPT = re.compile(r"^fishell-job:\s*(\d+)\s*$", re.MULTILINE)
@@ -43,10 +44,26 @@ _ID_SBATCH = re.compile(r"^\s*(\d+)")
 
 _SQUEUE = f"squeue -h -u \"$USER\" -o {shlex.quote(FMT_SQUEUE)}"
 _SACCT = f'sacct -u "$USER" -S now-1days -X -n -P -o {CAMPOS_SACCT}'
+# a fila fica em $q para saber, no próprio remoto, quais jobs registrados saíram dela
+_FILA = f'q=$({_SQUEUE}); printf \'%s\\n\' "$q"'
 
 
 def _q(x: str) -> str:
     return shlex.quote(x)
+
+
+def _fora_da_fila(ids: list[str]) -> str:
+    """Pede ao sacct, sem janela de tempo, os jobs registrados que não estão em $q.
+
+    Um job que terminou há mais de 1 dia sem ninguém olhar some da fila e da
+    janela do sacct; sem esta consulta ele ficaria ativo para sempre.
+    """
+    lista = " ".join(_q(i) for i in ids)
+    return (
+        f'f=; for j in {lista}; do printf \'%s\\n\' "$q" | cut -d"|" -f1 | cut -d_ -f1'
+        f' | grep -qx -- "$j" || f="$f,$j"; done; '
+        f'[ -z "$f" ] || sacct -j "${{f#,}}" -X -n -P -o {CAMPOS_SACCT}'
+    )
 
 
 def _tail_um(log: str) -> str:
@@ -91,7 +108,10 @@ class AdaptadorSlurm:
     # --- leitura -----------------------------------------------------
     def listar_jobs(self) -> list[Job]:
         ativos = self.estado.ativos(self.nome)
-        partes = [_SQUEUE, f"echo {SEP_SACCT}", _SACCT, f"echo {SEP_LOGS}"]
+        partes = [_FILA, f"echo {SEP_SACCT}", _SACCT, f"echo {SEP_ANTIGOS}"]
+        if ativos:
+            partes.append(_fora_da_fila([r.job_id for r in ativos]))
+        partes.append(f"echo {SEP_LOGS}")
         for r in ativos:
             if r.log:
                 partes.append(f"echo {_q(MARCA_LOG + r.job_id)}")
@@ -101,9 +121,11 @@ class AdaptadorSlurm:
             raise RuntimeError(r.erro.strip() or f"squeue falhou ({r.codigo})")
         texto_fila, _, resto = r.saida.partition(SEP_SACCT)
         texto_hist, _, texto_logs = resto.partition(SEP_LOGS)
+        texto_hist, _, texto_antigos = texto_hist.partition(SEP_ANTIGOS)
 
         registros = {x.job_id: x for x in self._registros()}
-        jobs = agrupar(self.nome, ler_squeue(texto_fila), ler_sacct(texto_hist), registros)
+        historico = ler_sacct(texto_hist) + ler_sacct(texto_antigos)
+        jobs = agrupar(self.nome, ler_squeue(texto_fila), historico, registros)
         ultimas = self._ultimas_linhas(texto_logs)
         saida: list[Job] = []
         for j in jobs:

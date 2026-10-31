@@ -7,13 +7,17 @@ import shutil
 import subprocess
 import sys
 from collections.abc import Callable
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from . import textos
 from .core.config import dir_estado
 from .core.estado import Estado
 from .core.hub import Hub
+
+# todos os destinos com job ativo falhando sem parar por esse tempo: o vigia
+# avisa e sai (o painel ou o `fishell jobs` o reiniciam depois)
+DESISTIR = timedelta(minutes=30)
 
 
 def rodar_vigia(
@@ -23,8 +27,10 @@ def rodar_vigia(
     dormir: Callable[[float], None],
     agora: Callable[[], datetime] = datetime.now,
 ) -> int:
+    falhando: dict[str, datetime] = {}  # destino -> desde quando não responde
     while True:
         visao = hub.atualizar()
+        agora_ = agora()
         for r in estado.pendentes_de_aviso():
             notificar(
                 textos.VIGIA_TITULO,
@@ -37,7 +43,18 @@ def rodar_vigia(
             return 1
         if not ativos and not estado.pendentes_de_aviso():
             return 0
-        agora_ = agora()
+        for d in list(falhando):
+            if d not in ativos:
+                del falhando[d]
+        for d in ativos:
+            if d not in hub.adaptadores or d in visao.avisos:
+                falhando.setdefault(d, agora_)
+            else:
+                falhando.pop(d, None)
+        if ativos and all(d in falhando and agora_ - falhando[d] >= DESISTIR for d in ativos):
+            mudos = ", ".join(sorted(ativos))
+            notificar(textos.VIGIA_TITULO, textos.VIGIA_SEM_RESPOSTA.format(destino=mudos))
+            return 0
         esperas = []
         for d in ativos:
             if d not in hub.adaptadores:

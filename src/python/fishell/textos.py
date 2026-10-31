@@ -14,6 +14,7 @@ HUB_ERRO_CONSULTA = "erro ao consultar: {erro}"
 VIGIA_TERMINOU = "{nome} terminou: {estado}"
 VIGIA_TITULO = "fishell"
 VIGIA_PAROU = "vigia parou: sem acesso ao {destino}"
+VIGIA_SEM_RESPOSTA = "vigia parou: {destino} sem resposta"
 AJUDA_VIGIA = "avisa quando os jobs terminam (uso interno)"
 
 # --- tela de jobs ---

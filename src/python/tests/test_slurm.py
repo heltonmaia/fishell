@@ -7,6 +7,7 @@ from fishell.adapters.conexao import Resultado
 from fishell.adapters.slurm import (
     LOG_EXTERNO,
     MARCA_LOG,
+    SEP_ANTIGOS,
     SEP_LOGS,
     SEP_SACCT,
     AdaptadorSlurm,
@@ -84,8 +85,10 @@ def adaptador(conexao, estado):
     return AdaptadorSlurm("npad", conexao, estado)
 
 
-def saida_lista(squeue="", sacct="", logs=""):
-    return Resultado(0, f"{squeue}\n{SEP_SACCT}\n{sacct}\n{SEP_LOGS}\n{logs}", "")
+def saida_lista(squeue="", sacct="", logs="", antigos=""):
+    return Resultado(
+        0, f"{squeue}\n{SEP_SACCT}\n{sacct}\n{SEP_ANTIGOS}\n{antigos}\n{SEP_LOGS}\n{logs}", ""
+    )
 
 
 def test_listar_jobs_usa_um_comando(adaptador, conexao):
@@ -311,3 +314,62 @@ def test_conclusao_atualiza_estado(adaptador, conexao, estado):
     assert jobs["2121060"].estado == EstadoJob.OK
     assert estado.ativos() == []
     assert estado.atualizar("npad", "2121060", EstadoJob.OK) is False
+
+
+# --- F1: job registrado que terminou sem ser visto --------------------
+def test_job_fora_da_fila_e_da_janela_e_resolvido_sem_janela(adaptador, conexao, estado):
+    estado.registrar("npad", "1900000", "pose", "antigo", None, None)
+    conexao.respostas.append(
+        saida_lista(
+            fixture("squeue_array.txt"), fixture("sacct.txt"),
+            antigos="1900000|antigo|COMPLETED|0:0|30:00:00",
+        )
+    )
+    jobs = {j.id: j for j in adaptador.listar_jobs()}
+    assert len(conexao.comandos) == 1
+    cmd = conexao.comandos[0]
+    assert "sacct -j" in cmd and "1900000" in cmd
+    trecho = cmd[cmd.index(SEP_ANTIGOS):cmd.index(SEP_LOGS)]
+    assert "now-1days" not in trecho
+    assert jobs["1900000"].estado == EstadoJob.OK
+    assert jobs["1900000"].externo is False
+    assert estado.ativos() == []
+
+
+def test_sem_job_registrado_nao_consulta_sem_janela(adaptador, conexao):
+    conexao.respostas.append(saida_lista(fixture("squeue_array.txt"), fixture("sacct.txt")))
+    adaptador.listar_jobs()
+    assert "sacct -j" not in conexao.comandos[0]
+
+
+def test_consulta_sem_janela_so_pede_os_que_sairam_da_fila(tmp_path, adaptador, conexao, estado):
+    """Roda o comando de verdade num bash local, com squeue e sacct falsos."""
+    import os
+    import stat
+    import subprocess
+
+    bin_ = tmp_path / "bin"
+    bin_.mkdir()
+    registro = tmp_path / "sacct.args"
+    fila = fixture("squeue_array.txt")
+    (bin_ / "squeue").write_text(f"#!/bin/sh\ncat <<'FIM'\n{fila}FIM\n")
+    (bin_ / "sacct").write_text(
+        f"#!/bin/sh\necho \"$*\" >> {registro}\n"
+        "case \"$*\" in *-j*) echo '1900000|antigo|TIMEOUT|0:0|48:00:00';; esac\n"
+    )
+    for f in ("squeue", "sacct"):
+        (bin_ / f).chmod((bin_ / f).stat().st_mode | stat.S_IEXEC)
+    for id_ in ("2200000", "2200100", "1900000"):
+        estado.registrar("npad", id_, "pose", "j" + id_, None, None)
+    conexao.respostas.append(saida_lista())
+    adaptador.listar_jobs()
+    env = dict(os.environ, PATH=f"{bin_}:{os.environ['PATH']}", USER="usuario")
+    r = subprocess.run(["bash", "-c", conexao.comandos[0]], capture_output=True, text=True, env=env)
+    chamadas = registro.read_text().splitlines()
+    sem_janela = [c for c in chamadas if "-j" in c.split()]
+    assert len(sem_janela) == 1
+    assert "1900000" in sem_janela[0]
+    assert "2200000" not in sem_janela[0] and "2200100" not in sem_janela[0]
+    assert "-S" not in sem_janela[0].split()
+    _, _, resto = r.stdout.partition(SEP_ANTIGOS)
+    assert "1900000|antigo|TIMEOUT" in resto.partition(SEP_LOGS)[0]
