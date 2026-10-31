@@ -21,3 +21,4 @@ packages = ["src/python/fishell"]
 [tool.pytest.ini_options]
 testpaths = ["src/python/tests"]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
