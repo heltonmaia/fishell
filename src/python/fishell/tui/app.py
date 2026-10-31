@@ -90,7 +90,7 @@ class FishellApp(App):
     CSS_PATH = Path(__file__).with_name("app.tcss")
     TITLE = textos.TUI_TITULO
     BINDINGS = [
-        Binding("tab", "alternar_foco", textos.TUI_TECLA_ALTERNAR),
+        Binding("tab", "alternar_foco", textos.TUI_TECLA_ALTERNAR, priority=True),
         Binding("enter", "abrir_log", textos.TUI_TECLA_LOG, priority=True),
         Binding("q", "quit", textos.TUI_TECLA_SAIR),
     ]
@@ -248,7 +248,7 @@ class FishellApp(App):
         self._checar_log()
 
     def check_action(self, action: str, parameters) -> bool | None:
-        if action == "abrir_log" and isinstance(self.screen, LogScreen):
+        if action in ("abrir_log", "alternar_foco") and isinstance(self.screen, LogScreen):
             return False
         return True
 

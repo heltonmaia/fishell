@@ -195,7 +195,20 @@ async def test_footer_tem_enter_log_cheio(tmp_path):
         ativos = app.active_bindings
         assert ativos["enter"].binding.description == textos.TUI_TECLA_LOG
         assert ativos["enter"].binding.show
-        assert "tab" in ativos and "q" in ativos
+        assert ativos["tab"].binding.description == textos.TUI_TECLA_ALTERNAR
+        assert ativos["tab"].binding.show
+        assert "q" in ativos
+
+
+async def test_tab_alterna_entre_jobs_e_destinos(tmp_path):
+    app = FishellApp(_dois_destinos(tmp_path))
+    async with app.run_test(size=(100, 30)) as pilot:
+        await _esperar(app, pilot)
+        assert app.focused.id == "jobs"
+        await pilot.press("tab")
+        assert app.focused.id == "destinos"
+        await pilot.press("tab")
+        assert app.focused.id == "jobs"
 
 
 async def test_recurso_com_texto_leva_rotulo(tmp_path):
