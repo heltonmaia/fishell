@@ -3,6 +3,11 @@
 O NPAD bloqueia a conta por cerca de 30 minutos depois de muitas conexões
 novas em poucos minutos. Por isso toda chamada ssh/rsync reaproveita o mesmo
 socket e uma recusa interrompe qualquer nova tentativa durante 30 minutos.
+
+O bloqueio fica gravado em `<dir_ctl>/<alias>.bloqueio` (a hora `ate` em ISO):
+o painel, o vigia e o `fishell jobs` são processos diferentes e todos o
+respeitam. Um erro que nem chegou ao cluster (DNS, rede, ControlPath longo
+demais, tempo esgotado no connect) espera só 2 minutos.
 """
 
 from __future__ import annotations
@@ -21,6 +26,32 @@ from ..core.modelos import Transferencia
 from .base import ErroAutenticacao, Indisponivel, Saida
 
 BLOQUEIO = timedelta(minutes=30)
+BLOQUEIO_CURTO = timedelta(minutes=2)
+
+# o servidor recusou: 30 min (vence qualquer outra pista no mesmo erro)
+_RECUSA = ("by remote host", "Connection reset", "Too many", "kex_exchange_identification")
+# nunca chegou ao cluster: 2 min
+_NAO_CHEGOU = (
+    "Could not resolve hostname",
+    "Name or service not known",
+    "Temporary failure in name resolution",
+    "Network is unreachable",
+    "No route to host",
+    "ControlPath too long",
+    "too long for Unix domain socket",
+)
+
+
+def espera_do_erro(erro: str) -> timedelta:
+    """Quanto esperar depois de um `ssh` que saiu com 255 (sem "Permission denied")."""
+    if any(m in erro for m in _RECUSA):
+        return BLOQUEIO
+    if any(m in erro for m in _NAO_CHEGOU):
+        return BLOQUEIO_CURTO
+    if "connect to host" in erro and "timed out" in erro:
+        # o connect() só acontece sem mestre vivo: com ele, o ssh usa o socket
+        return BLOQUEIO_CURTO
+    return BLOQUEIO
 
 
 @dataclass(frozen=True)
@@ -120,13 +151,35 @@ class Conexao:
             "-o", "ServerAliveInterval=30",
         ]  # fmt: skip
 
+    def _arquivo_bloqueio(self) -> Path:
+        return self.dir_ctl / f"{self.alias.replace('/', '_')}.bloqueio"
+
+    def _ler_bloqueio(self) -> datetime | None:
+        try:
+            return datetime.fromisoformat(self._arquivo_bloqueio().read_text().strip())
+        except (OSError, ValueError):
+            return None
+
+    def _gravar_bloqueio(self, ate: datetime) -> None:
+        arquivo = self._arquivo_bloqueio()
+        temp = arquivo.with_name(f"{arquivo.name}.{os.getpid()}.tmp")
+        try:
+            self.dir_ctl.mkdir(mode=0o700, parents=True, exist_ok=True)
+            temp.write_text(ate.isoformat() + "\n")
+            os.replace(temp, arquivo)
+        except OSError:
+            pass  # o bloqueio em memória continua valendo neste processo
+
     def _verificar(self) -> None:
         with self._estado:
             ate = self._bloqueado_ate
-            if ate is not None:
-                if self._agora() < ate:
-                    raise Indisponivel(ate, "conexão recusada")
-                self._bloqueado_ate = None
+            gravado = self._ler_bloqueio()
+            if gravado is not None and (ate is None or gravado > ate):
+                ate = gravado
+            if ate is not None and self._agora() < ate:
+                self._bloqueado_ate = ate
+                raise Indisponivel(ate)
+            self._bloqueado_ate = None
 
     def _tentar(self, argv: list[str], timeout: float | None, saida: Saida | None) -> Resultado:
         self._verificar()
@@ -135,8 +188,9 @@ class Conexao:
             if "Permission denied" in r.erro:
                 raise ErroAutenticacao(r.erro.strip())
             with self._estado:
-                self._bloqueado_ate = self._agora() + BLOQUEIO
-                ate = self._bloqueado_ate
+                ate = self._agora() + espera_do_erro(r.erro)
+                self._bloqueado_ate = ate
+                self._gravar_bloqueio(ate)
             raise Indisponivel(ate, r.erro.strip())
         return r
 

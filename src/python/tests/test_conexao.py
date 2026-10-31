@@ -221,3 +221,65 @@ def test_saida_que_levanta_mata_o_filho(tmp_path):
     vivo = subprocess.run(["pgrep", "-f", "sleep 5.123"], capture_output=True)
     assert vivo.stdout == b""
 
+
+
+# --- F2: bloqueio gravado em arquivo e as duas famílias de erro --------
+def test_bloqueio_de_uma_instancia_vale_para_outra(tmp_path):
+    c1, chamadas1, _ = montar(tmp_path, [Resultado(255, "", "Connection closed by remote host")])
+    with pytest.raises(Indisponivel):
+        c1.comando("squeue")
+    assert (tmp_path / "ctl" / "npad.bloqueio").read_text().strip() == (
+        T0 + timedelta(minutes=30)
+    ).isoformat()
+    c2, chamadas2, relogio2 = montar(tmp_path)  # outro processo, mesmo dir_ctl
+    with pytest.raises(Indisponivel) as e:
+        c2.comando("squeue")
+    assert e.value.ate == T0 + timedelta(minutes=30)
+    with pytest.raises(Indisponivel):
+        c2.rsync("a/", "npad:b/", Transferencia("a/", "b/"))
+    assert chamadas2 == []
+    relogio2.avancar(minutes=31)
+    assert c2.comando("squeue").codigo == 0
+    assert len(chamadas2) == 1
+
+
+def test_bloqueio_vencido_no_arquivo_e_ignorado(tmp_path):
+    (tmp_path / "ctl").mkdir()
+    (tmp_path / "ctl" / "npad.bloqueio").write_text((T0 - timedelta(minutes=1)).isoformat())
+    c, chamadas, _ = montar(tmp_path)
+    assert c.comando("squeue").codigo == 0
+    assert len(chamadas) == 1
+
+
+def test_bloqueio_de_outro_alias_nao_vale(tmp_path):
+    (tmp_path / "ctl").mkdir()
+    (tmp_path / "ctl" / "lab.bloqueio").write_text((T0 + timedelta(minutes=10)).isoformat())
+    c, chamadas, _ = montar(tmp_path)
+    assert c.comando("squeue").codigo == 0
+
+
+@pytest.mark.parametrize(
+    "erro,minutos",
+    [
+        # recusa do servidor: 30 min
+        ("kex_exchange_identification: Connection closed by remote host", 30),
+        ("Connection closed by 10.0.0.1 port 4422", 30),
+        ("kex_exchange_identification: read: Connection reset by peer", 30),
+        ("Received disconnect from 10.0.0.1 port 4422:2: Too many authentication failures", 30),
+        ("ssh: connect to host sc2.npad.ufrn.br port 4422: Connection refused", 30),
+        ("algo que nunca vimos", 30),
+        # nunca chegou ao cluster: 2 min
+        ("ssh: Could not resolve hostname npad: Name or service not known", 2),
+        ("ssh: Could not resolve hostname sc2.npad.ufrn.br: Temporary failure in name resolution", 2),
+        ("ssh: connect to host sc2.npad.ufrn.br port 4422: Network is unreachable", 2),
+        ("ssh: connect to host sc2.npad.ufrn.br port 4422: No route to host", 2),
+        ("ssh: connect to host sc2.npad.ufrn.br port 4422: Connection timed out", 2),
+        ("unix_listener: path \"/x/ctl/abc.XYZ\" too long for Unix domain socket", 2),
+        ("ControlPath too long ('/x/ctl/abc' >= 108 bytes)", 2),
+    ],
+)
+def test_familias_de_erro(tmp_path, erro, minutos):
+    c, _, _ = montar(tmp_path, [Resultado(255, "", erro)])
+    with pytest.raises(Indisponivel) as e:
+        c.comando("squeue")
+    assert e.value.ate == T0 + timedelta(minutes=minutos)
