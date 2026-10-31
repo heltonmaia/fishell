@@ -38,6 +38,8 @@ TUI_ESTADO_FALHOU = "✗ falhou"
 TUI_ESTADO_CANCELADO = "⊘ cancelado"
 TUI_ESTADO_DESCONHECIDO = "? desconhecido"
 AJUDA_MENU = "abre a tela de jobs (padrão)"
+AJUDA_JOBS = "lista os jobs de todos os destinos em texto"
+JOBS_AVISO = "aviso {destino}: {texto}"
 
 # --- ações no painel ---
 TUI_TECLA_NOVO = "novo job"

@@ -5,6 +5,7 @@ from fishell import __version__, textos, vigia
 from fishell.core.config import dir_estado
 from fishell.core.hub import Hub
 from fishell.core.montagem import montar_hub
+from fishell.formato import linha_job
 
 _lock_vigia = None  # mantido aberto pelo tempo de vida do processo
 
@@ -25,6 +26,7 @@ def _parser() -> argparse.ArgumentParser:
     sub = p.add_subparsers(dest="comando")
     sub.add_parser("vigia", help=textos.AJUDA_VIGIA)
     sub.add_parser("menu", help=textos.AJUDA_MENU)
+    sub.add_parser("jobs", help=textos.AJUDA_JOBS)
     return p
 
 
@@ -37,6 +39,15 @@ def _vigia() -> int:
     return vigia.rodar_vigia(hub, hub.estado, vigia.notificar_desktop, time.sleep)
 
 
+def _jobs() -> int:
+    visao = _hub().atualizar(forcar=True)
+    for celulas in (textos.TUI_COLUNAS, *(linha_job(j) for j in visao.jobs)):
+        print("  ".join(celulas).rstrip())
+    for destino, texto in visao.avisos.items():
+        print(textos.JOBS_AVISO.format(destino=destino, texto=texto))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     try:
         args = _parser().parse_args(argv)
@@ -44,5 +55,7 @@ def main(argv: list[str] | None = None) -> int:
         return e.code if isinstance(e.code, int) else 0
     if args.comando == "vigia":
         return _vigia()
+    if args.comando == "jobs":
+        return _jobs()
     _abrir_tela(_hub())
     return 0

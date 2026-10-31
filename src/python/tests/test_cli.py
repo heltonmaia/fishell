@@ -8,3 +8,30 @@ def test_versao(capsys):
 
 def test_subcomando_desconhecido():
     assert main(["xyz"]) == 2
+
+
+def test_jobs_em_texto(monkeypatch, capsys):
+    from fishell import cli
+    from fishell.core.hub import Visao
+    from fishell.core.modelos import EstadoJob, Job
+
+    class HubFalso:
+        def atualizar(self, forcar=False):
+            assert forcar is True
+            return Visao(
+                jobs=[
+                    Job(id="7", destino="npad", nome="treino", estado=EstadoJob.OK,
+                        projeto="demo", decorrido="00:01:02", ultima_linha="fim"),
+                    Job(id="8", destino="local", nome="x", estado=EstadoJob.RODANDO,
+                        externo=True, decorrido="5s"),
+                ],
+                avisos={"npad": "sem acesso"},
+            )
+
+    monkeypatch.setattr(cli, "_hub", lambda: HubFalso())
+    assert main(["jobs"]) == 0
+    linhas = capsys.readouterr().out.splitlines()
+    assert linhas[0] == "DESTINO  PROJETO  JOB  ESTADO  TEMPO  LOG"
+    assert linhas[1] == "npad  demo  treino  ✓ ok  00:01:02  fim"
+    assert linhas[2] == "local    x *  ● rodando  5s"
+    assert linhas[-1] == "aviso npad: sem acesso"

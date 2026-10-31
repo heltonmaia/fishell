@@ -18,6 +18,7 @@ from .. import textos
 from .acoes import ConfirmarScreen, NovoJobScreen, TrazerScreen
 from ..core.hub import Hub, Visao
 from ..core.modelos import EstadoJob, Job
+from ..formato import linha_job
 
 LINHAS_LOG = 40
 LINHAS_LOG_CHEIO = 400
@@ -26,20 +27,6 @@ _ACOES_DO_PAINEL = frozenset(
     {"abrir_log", "alternar_foco", "novo_job", "montar", "trazer", "cancelar", "quit"}
 )
 _ATIVOS = (("●", EstadoJob.RODANDO), ("◌", EstadoJob.FILA))
-
-
-def texto_estado(job: Job) -> str:
-    e = job.estado
-    if e == EstadoJob.RODANDO:
-        if job.array_total:
-            return textos.TUI_ESTADO_ARRAY.format(ok=job.array_ok or 0, total=job.array_total)
-        return textos.TUI_ESTADO_RODANDO
-    return {
-        EstadoJob.FILA: textos.TUI_ESTADO_FILA,
-        EstadoJob.OK: textos.TUI_ESTADO_OK,
-        EstadoJob.FALHOU: textos.TUI_ESTADO_FALHOU,
-        EstadoJob.CANCELADO: textos.TUI_ESTADO_CANCELADO,
-    }.get(e, textos.TUI_ESTADO_DESCONHECIDO)
 
 
 def _texto_recurso(r) -> str:
@@ -224,17 +211,7 @@ class FishellApp(App):
 
     def _montar_tabela(self) -> None:
         linhas = [
-            (
-                _chave(j),
-                (
-                    j.destino,
-                    j.projeto or "",
-                    j.nome + (" *" if j.externo else ""),
-                    texto_estado(j),
-                    j.decorrido,
-                    j.ultima_linha or j.motivo,
-                ),
-            )
+            (_chave(j), linha_job(j))
             for j in self._visao.jobs
             if self._filtro is None or j.destino == self._filtro
         ]
