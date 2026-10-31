@@ -245,3 +245,17 @@ jobs:
             grep -q "'$c'" src/powershell/fishell.ps1     || { echo "falta '$c' no fishell.ps1"; exit 1; }
           done
           echo "subcomandos ok"
+
+  python:
+    name: fishell (python)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: dependências
+        run: uv sync --locked
+
+      - name: testes
+        run: uv run pytest -q
