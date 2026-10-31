@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import time
 from pathlib import Path
 
@@ -37,6 +38,11 @@ def texto_estado(job: Job) -> str:
     }.get(e, textos.TUI_ESTADO_DESCONHECIDO)
 
 
+def _texto_recurso(r) -> str:
+    rotulo = re.sub(r"^gpu-\d+-", "", r.rotulo)
+    return f"{rotulo} {r.texto}" if r.texto else f"{rotulo} {r.livres}/{r.total}"
+
+
 def _chave(job: Job) -> str:
     return f"{job.destino}\x00{job.id}"
 
@@ -68,10 +74,7 @@ class LogScreen(Screen):
             linhas = self._hub.log(self._job, LINHAS_LOG_CHEIO)
         except Exception as e:  # noqa: BLE001
             linhas = [textos.TUI_ERRO_LOG.format(erro=e)]
-        try:
-            self.app.call_from_thread(self._pintar, linhas)
-        except Exception:  # noqa: BLE001 - a tela pode já ter saído
-            pass
+        self.app._na_principal(self._pintar, linhas)
 
     def _pintar(self, linhas: list[str]) -> None:
         log = self.query_one("#log-cheio", RichLog)
@@ -88,6 +91,7 @@ class FishellApp(App):
     TITLE = textos.TUI_TITULO
     BINDINGS = [
         Binding("tab", "alternar_foco", textos.TUI_TECLA_ALTERNAR),
+        Binding("enter", "abrir_log", textos.TUI_TECLA_LOG, priority=True),
         Binding("q", "quit", textos.TUI_TECLA_SAIR),
     ]
 
@@ -99,6 +103,7 @@ class FishellApp(App):
         self._atualizando = False
         self._log_chave: str | None = None
         self._log_t = 0.0
+        self._linhas: list[tuple] | None = None
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -140,8 +145,20 @@ class FishellApp(App):
     def _na_principal(self, fn, *args) -> None:
         try:
             self.call_from_thread(fn, *args)
-        except Exception:  # noqa: BLE001 - o app pode já ter saído
-            pass
+        except RuntimeError as e:
+            if not self._saiu(e):
+                self._avisar_erro(e)
+        except Exception as e:  # noqa: BLE001 - o erro do callback vira aviso
+            self._avisar_erro(e)
+
+    def _saiu(self, e: RuntimeError) -> bool:
+        return self._loop is None or "not running" in str(e)
+
+    def _avisar_erro(self, e: Exception) -> None:
+        try:
+            self.call_from_thread(self._falha, textos.TUI_ERRO.format(erro=e))
+        except RuntimeError:
+            pass  # o app saiu entre uma chamada e a outra
 
     def _falha(self, mensagem: str) -> None:
         self.notify(mensagem, severity="error")
@@ -160,11 +177,11 @@ class FishellApp(App):
         cabeca = f"{nome}  {sinais}".rstrip()
         aviso = v.avisos.get(nome)
         if aviso:
-            baixo = aviso
+            baixo = [aviso]
         else:
-            rs = v.recursos.get(nome, [])[:3]
-            baixo = " ".join(r.texto or f"{r.rotulo} {r.livres}/{r.total}" for r in rs)
-        return f"{cabeca}\n{baixo[:LARGURA_LINHA]}"
+            rs = sorted(v.recursos.get(nome, []), key=lambda r: "gpu" not in r.rotulo)[:3]
+            baixo = [_texto_recurso(r) for r in rs]
+        return "\n".join([cabeca, *(b[:LARGURA_LINHA] for b in baixo)])
 
     def _montar_destinos(self) -> None:
         barra = self.query_one("#destinos", OptionList)
@@ -198,21 +215,29 @@ class FishellApp(App):
         return None
 
     def _montar_tabela(self) -> None:
+        linhas = [
+            (
+                _chave(j),
+                (
+                    j.destino,
+                    j.projeto or "",
+                    j.nome + (" *" if j.externo else ""),
+                    texto_estado(j),
+                    j.decorrido,
+                    j.ultima_linha or j.motivo,
+                ),
+            )
+            for j in self._visao.jobs
+            if self._filtro is None or j.destino == self._filtro
+        ]
+        if linhas == self._linhas:
+            return
+        self._linhas = linhas
         tabela = self.query_one("#jobs", DataTable)
         atual = self._job_destacado()
         tabela.clear()
-        for j in self._visao.jobs:
-            if self._filtro is not None and j.destino != self._filtro:
-                continue
-            tabela.add_row(
-                j.destino,
-                j.projeto or "",
-                j.nome + (" *" if j.externo else ""),
-                texto_estado(j),
-                j.decorrido,
-                j.ultima_linha or j.motivo,
-                key=_chave(j),
-            )
+        for chave, celulas in linhas:
+            tabela.add_row(*celulas, key=chave)
         if atual is not None:
             try:
                 tabela.move_cursor(row=tabela.get_row_index(_chave(atual)))
@@ -222,7 +247,12 @@ class FishellApp(App):
     def on_data_table_row_highlighted(self, ev: DataTable.RowHighlighted) -> None:
         self._checar_log()
 
-    def on_data_table_row_selected(self, ev: DataTable.RowSelected) -> None:
+    def check_action(self, action: str, parameters) -> bool | None:
+        if action == "abrir_log" and isinstance(self.screen, LogScreen):
+            return False
+        return True
+
+    def action_abrir_log(self) -> None:
         job = self._job_destacado()
         if job is not None:
             self.push_screen(LogScreen(self.hub, job))

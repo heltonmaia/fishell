@@ -5,13 +5,18 @@ from fishell import __version__, textos, vigia
 from fishell.core.config import dir_estado
 from fishell.core.hub import Hub
 from fishell.core.montagem import montar_hub
-from fishell.tui.app import FishellApp
 
 _lock_vigia = None  # mantido aberto pelo tempo de vida do processo
 
 
 def _hub() -> Hub:
     return montar_hub(iniciar_vigia=lambda: vigia.garantir_vigia(dir_estado()))
+
+
+def _abrir_tela(hub: Hub) -> None:
+    from fishell.tui.app import FishellApp  # só aqui: o vigia não carrega a interface
+
+    FishellApp(hub).run()
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -39,5 +44,5 @@ def main(argv: list[str] | None = None) -> int:
         return e.code if isinstance(e.code, int) else 0
     if args.comando == "vigia":
         return _vigia()
-    FishellApp(_hub()).run()
+    _abrir_tela(_hub())
     return 0

@@ -2,7 +2,7 @@ from datetime import datetime
 
 from textual.widgets import DataTable, OptionList, RichLog
 
-from fishell import cli
+from fishell import cli, textos
 from fishell.adapters.base import Indisponivel
 from fishell.core.estado import Estado
 from fishell.core.hub import Hub
@@ -13,6 +13,11 @@ from tests.fakes import AdaptadorFalso
 
 def _hub(tmp_path, *adaptadores):
     return Hub({a.nome: a for a in adaptadores}, Estado(tmp_path / "e.db"), [])
+
+
+def _prompts(app):
+    barra = app.query_one("#destinos", OptionList)
+    return " ".join(str(barra.get_option_at_index(i).prompt) for i in range(barra.option_count))
 
 
 def _celulas(tabela):
@@ -153,9 +158,94 @@ async def test_erro_no_hub_vira_aviso_sem_derrubar(tmp_path):
 
     hub.atualizar = quebra
     app = FishellApp(hub)
+    avisos = []
+    app.notify = lambda msg, **kw: avisos.append((msg, kw))
     async with app.run_test(size=(100, 30)) as pilot:
         await _esperar(app, pilot)
         assert app.is_running
+        assert avisos and "boom" in avisos[0][0]
+        assert avisos[0][1].get("severity") == "error"
+
+
+async def test_erro_no_callback_chega_na_notificacao(tmp_path):
+    app = FishellApp(_dois_destinos(tmp_path))
+    avisos = []
+    app.notify = lambda msg, **kw: avisos.append(msg)
+
+    def quebra(visao):
+        raise ValueError("cb")
+
+    app._aplicar = quebra
+    async with app.run_test(size=(100, 30)) as pilot:
+        await _esperar(app, pilot)
+        assert any("cb" in a for a in avisos)
+
+
+async def test_chamada_apos_sair_nao_levanta(tmp_path):
+    app = FishellApp(_dois_destinos(tmp_path))
+    async with app.run_test(size=(100, 30)) as pilot:
+        await _esperar(app, pilot)
+    app._na_principal(lambda: None)
+
+
+async def test_footer_tem_enter_log_cheio(tmp_path):
+    app = FishellApp(_dois_destinos(tmp_path))
+    async with app.run_test(size=(100, 30)) as pilot:
+        await _esperar(app, pilot)
+        ativos = app.active_bindings
+        assert ativos["enter"].binding.description == textos.TUI_TECLA_LOG
+        assert ativos["enter"].binding.show
+        assert "tab" in ativos and "q" in ativos
+
+
+async def test_recurso_com_texto_leva_rotulo(tmp_path):
+    ad = AdaptadorFalso(nome="local", recursos=[Recurso("RTX 5060 Ti", texto="0% 1/16G")])
+    app = FishellApp(_hub(tmp_path, ad))
+    async with app.run_test(size=(100, 30)) as pilot:
+        await _esperar(app, pilot)
+        assert "RTX 5060 Ti 0% 1/16G" in _prompts(app)
+
+
+async def test_recursos_uma_por_linha_gpu_primeiro(tmp_path):
+    ad = AdaptadorFalso(
+        nome="npad",
+        recursos=[
+            Recurso("amd-512", 11, 56),
+            Recurso("amd-3tb", 1, 4),
+            Recurso("gpu-4-a100", 0, 1),
+            Recurso("gpu-2-h200", 0, 2),
+        ],
+    )
+    app = FishellApp(_hub(tmp_path, ad))
+    async with app.run_test(size=(100, 30)) as pilot:
+        await _esperar(app, pilot)
+        barra = app.query_one("#destinos", OptionList)
+        linhas = str(barra.get_option_at_index(1).prompt).split("\n")
+        assert linhas == ["npad", "a100 0/1", "h200 0/2", "amd-512 11/56"]
+
+
+async def test_aviso_substitui_recursos(tmp_path):
+    ate = datetime(2026, 10, 31, 10, 30)
+    ad = AdaptadorFalso(nome="npad", erro=Indisponivel(ate))
+    app = FishellApp(_hub(tmp_path, ad))
+    async with app.run_test(size=(100, 30)) as pilot:
+        await _esperar(app, pilot)
+        barra = app.query_one("#destinos", OptionList)
+        assert str(barra.get_option_at_index(1).prompt).split("\n")[1] == "indisponível até 10:30"
+
+
+async def test_tabela_nao_reconstroi_sem_mudanca(tmp_path):
+    app = FishellApp(_dois_destinos(tmp_path))
+    async with app.run_test(size=(100, 30)) as pilot:
+        await _esperar(app, pilot)
+        tabela = app.query_one("#jobs", DataTable)
+        n = []
+        original = tabela.clear
+        tabela.clear = lambda *a, **k: (n.append(1), original(*a, **k))[1]
+        for _ in range(2):
+            app.atualizar_agora()
+            await _esperar(app, pilot)
+        assert n == []
 
 
 def test_sem_subcomando_abre_a_tela(monkeypatch):
@@ -169,9 +259,20 @@ def test_sem_subcomando_abre_a_tela(monkeypatch):
             aberto.append("run")
 
     monkeypatch.setattr(cli, "_hub", lambda: "HUB")
-    monkeypatch.setattr(cli, "FishellApp", Falso)
+    monkeypatch.setattr(cli, "_abrir_tela", lambda hub: Falso(hub).run())
     assert cli.main([]) == 0
     assert aberto == ["HUB", "run"]
     aberto.clear()
     assert cli.main(["menu"]) == 0
     assert aberto == ["HUB", "run"]
+
+
+def test_cli_nao_carrega_textual_no_import():
+    import subprocess
+    import sys
+
+    r = subprocess.run(
+        [sys.executable, "-c", "import sys, fishell.cli; print('textual' in sys.modules)"],
+        capture_output=True, text=True,
+    )
+    assert r.stdout.strip() == "False"

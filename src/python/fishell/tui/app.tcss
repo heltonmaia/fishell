@@ -1,5 +1,5 @@
 #corpo { height: 1fr; }
-#destinos { width: 28; border: round $primary; }
-#jobs { width: 1fr; border: round $primary; }
+#destinos { width: 28; height: 100%; border: round $primary; }
+#jobs { width: 1fr; height: 100%; border: round $primary; }
 #log { height: 10; border: round $primary; }
 #log-cheio { height: 1fr; border: round $primary; }
