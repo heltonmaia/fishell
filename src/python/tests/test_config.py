@@ -57,3 +57,33 @@ def test_cwd_com_receita_entra(tmp_path):
     receitas = descobrir_receitas(ler_config(tmp_path), p)
     assert [r.raiz for r in receitas] == [p]
     assert descobrir_receitas(ler_config(tmp_path), tmp_path) == []
+
+
+# --- F6: destinos.toml inválido vira um erro claro ----------------------
+import pytest
+
+from fishell.core.config import ErroConfig
+
+
+@pytest.mark.parametrize(
+    "conteudo,trecho",
+    [
+        ("isto não é toml [[[", "TOML inválido"),
+        ('[[destino]]\ntipo = "slurm"\n', "nome"),
+        ('[[destino]]\nnome = "lab"\n', "tipo"),
+        ('[[destino]]\nnome = "lab"\ntipo = "ssh"\n', "ssh"),
+        ('[[destino]]\nnome = "lab"\ntipo = "slurm"\nparticoes = "gpu"\n', "particoes"),
+        ('[[destino]]\nnome = "lab"\ntipo = "slurm"\nssh = 3\n', "ssh"),
+        ('projetos = "~/x"\n', "projetos"),
+        ('destino = "npad"\n', "destino"),
+        ('[[destino]]\nnome = "a"\ntipo = "local"\n[[destino]]\nnome = "a"\ntipo = "slurm"\n', "repetido"),
+    ],
+)
+def test_destinos_invalido_levanta_erro_config(tmp_path, conteudo, trecho):
+    (tmp_path / "destinos.toml").write_text(conteudo, encoding="utf-8")
+    with pytest.raises(ErroConfig) as e:
+        ler_config(tmp_path)
+    msg = str(e.value)
+    assert trecho in msg
+    assert "destinos.toml" in msg
+    assert "\n" not in msg

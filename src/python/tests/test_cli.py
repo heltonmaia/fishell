@@ -66,3 +66,23 @@ def test_jobs_garante_o_vigia(monkeypatch, capsys):
     assert main(["jobs"]) == 0
     err = capsys.readouterr().err
     assert "sem permissão" in err and len(err.strip().splitlines()) == 1
+
+
+# --- F6: config inválida sai com 1 e uma linha no stderr ---------------
+import pytest
+
+
+@pytest.mark.parametrize("argv", [["jobs"], [], ["menu"], ["vigia"]])
+def test_config_invalida_sai_com_1_sem_traceback(tmp_path, monkeypatch, capsys, argv):
+    from fishell import cli
+
+    (tmp_path / "cfg").mkdir()
+    (tmp_path / "cfg" / "destinos.toml").write_text('[[destino]]\nnome = "x"\ntipo = "ssh"\n')
+    monkeypatch.setenv("FISHELL_CONFIG_DIR", str(tmp_path / "cfg"))
+    monkeypatch.setenv("FISHELL_STATE_DIR", str(tmp_path / "est"))
+    monkeypatch.setattr(cli, "_abrir_tela", lambda hub: pytest.fail("abriu a tela"))
+    assert main(argv) == 1
+    saida = capsys.readouterr()
+    assert saida.out == ""
+    linhas = saida.err.strip().splitlines()
+    assert len(linhas) == 1 and "destinos.toml" in linhas[0] and "ssh" in linhas[0]

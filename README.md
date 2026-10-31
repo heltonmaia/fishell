@@ -445,11 +445,20 @@ SSH `npad`). Para ajustar, crie `~/.config/fishell/destinos.toml`:
 projetos = ["~/work/pose", "~/work/yolo"]   # pastas com fishell.toml (a pasta atual também conta)
 
 [[destino]]
+nome = "local"
+tipo = "local"
+
+[[destino]]
 nome = "npad"
 tipo = "slurm"
 ssh = "npad"
 particoes = ["gpu-4-a100", "amd-512"]
 ```
+
+A lista de `[[destino]]` **substitui** os destinos padrão por inteiro: quem
+escreve só o `npad` fica sem o `local`. Cada destino precisa de `nome` e de
+`tipo` (`local` ou `slurm`); um arquivo com erro faz o `fishell` parar com uma
+linha dizendo o que está errado.
 
 O estado (banco de jobs, log do vigia, sockets) fica em `~/.local/state/fishell/`.
 Os dois lugares podem ser trocados com `FISHELL_CONFIG_DIR` e `FISHELL_STATE_DIR`.

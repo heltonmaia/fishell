@@ -3,7 +3,7 @@ import sys
 import time
 
 from fishell import __version__, textos, vigia
-from fishell.core.config import dir_estado
+from fishell.core.config import ErroConfig, dir_estado
 from fishell.core.hub import Hub
 from fishell.core.montagem import montar_hub
 from fishell.formato import linha_job
@@ -58,9 +58,14 @@ def main(argv: list[str] | None = None) -> int:
         args = _parser().parse_args(argv)
     except SystemExit as e:
         return e.code if isinstance(e.code, int) else 0
-    if args.comando == "vigia":
-        return _vigia()
-    if args.comando == "jobs":
-        return _jobs()
-    _abrir_tela(_hub())
+    try:
+        if args.comando == "vigia":
+            return _vigia()
+        if args.comando == "jobs":
+            return _jobs()
+        hub = _hub()
+    except ErroConfig as e:
+        print(textos.ERRO_CONFIG.format(erro=e), file=sys.stderr)
+        return 1
+    _abrir_tela(hub)
     return 0
