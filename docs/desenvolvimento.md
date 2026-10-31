@@ -176,3 +176,118 @@ chmod 600 .ssh/id_rsa .ssh/known_hosts
 chmod 644 .ssh/id_rsa.pub
 chmod +x bin/fishell.sh src/bash/fishell.sh
 ```
+
+## Versão Python
+
+Terceira implementação, **fora da paridade** com o bash e o PowerShell: só
+Linux, com outro escopo (painel de jobs de vários destinos). Os dois ports
+acima não mudam por causa dela, e o CI de paridade não a enxerga. O que ela faz
+para quem usa está na parte 7 do [README](../README.md).
+
+### Estrutura
+
+```
+pyproject.toml, uv.lock   na raiz (entrypoint: fishell = fishell.cli:main)
+src/python/fishell/
+  core/       modelos, receita, config, estado, hub, montagem
+  adapters/   base (interface), conexao, slurm_saidas, slurm, local
+  vigia.py    processo de aviso de fim de job
+  formato.py  linha de job para texto
+  textos.py   todo texto de interface (pt-BR)
+  tui/        app.py (telas) e acoes.py (fluxos de enviar, montar, submeter...)
+  cli.py      fishell, menu, jobs, vigia
+src/python/tests/   pytest; fixtures/ guarda saídas gravadas das ferramentas
+```
+
+### Camadas
+
+- **Núcleo** (`core/`): não conhece SSH nem Slurm. `modelos` define `Job`,
+  `Receita`, `Recurso`; `receita` lê o `fishell.toml`; `config` lê o
+  `destinos.toml`; `estado` é o SQLite dos jobs iniciados pelo fishell;
+  `hub` reúne os adaptadores, aplica os intervalos de atualização e entrega a
+  visão (jobs e avisos por destino); `montagem` liga tudo (`montar_hub`).
+- **Adaptadores** (`adapters/`): um por tipo de destino. `slurm` fala com o NPAD
+  por `conexao` (a conexão SSH única); `slurm_saidas` só interpreta o texto de
+  `squeue`, `sinfo` e `sacct`; `local` roda jobs em `tmux`.
+- **Frentes**: a TUI (`tui/`) e a linha de comando (`cli.py`) chamam o `Hub`,
+  nunca um adaptador direto. O vigia (`vigia.py`) é outra frente: não carrega a
+  interface.
+
+### Interface `Adaptador`
+
+Definida em `adapters/base.py` (`Protocol`): atributos `nome`, `intervalo` (s
+entre atualizações) e `capacidades` (subconjunto de `ambiente`, `submeter`,
+`cancelar`, `log`, `enviar`, `trazer`), e os métodos `listar_jobs`, `recursos`,
+`enviar`, `trazer`, `montar_ambiente`, `submeter`, `cancelar` e `log`. Um
+adaptador sinaliza destino bloqueado com `Indisponivel(ate)` e falha de
+autenticação com `ErroAutenticacao`; o hub cuida do resto.
+
+**Para acrescentar um destino:** escreva o adaptador em `adapters/`, com um
+teste contra saídas gravadas ou falsas (`tests/fakes.py`); registre-o em
+`core/montagem.py` conforme o `tipo` do `[[destino]]` e acrescente o tipo ao
+`core/config.py`. Nada em `tui/` ou `cli.py` deve mudar.
+
+### Formato da receita
+
+Arquivo `fishell.toml` na raiz do projeto. Topo: `nome` (opcional). Uma tabela
+por nome de destino (`[npad]`, `[local]`), com as chaves:
+
+| chave | tipo | sentido |
+| --- | --- | --- |
+| `remoto` | texto | pasta do projeto no destino (aceita `$USER`) |
+| `enviar`, `trazer` | lista | itens de transferência |
+| `ambiente` | texto | script que monta o ambiente, relativo a `remoto` |
+| `job` | texto | `.sbatch` submetido com `sbatch --parsable` |
+| `submeter` | texto | script do projeto que chama o `sbatch` |
+| `log` | texto | caminho do log do job |
+| `comando` | texto | comando do destino `local` |
+| `particao` | texto | partição padrão |
+
+Regras que o `receita.py` impõe: chave desconhecida é erro; `job` e `submeter`
+são exclusivos; `submeter` exige `log`. Um item de transferência é
+`"origem/ -> destino/"`, um texto sem ` -> ` (mesmo caminho nos dois lados) ou
+uma tabela `{de, para, incluir, excluir}`.
+
+**Convenção do `submeter`:** o script roda no remoto e precisa imprimir uma
+linha `fishell-job: <id>` com o id do job Slurm. O fishell usa esse id para
+acompanhar e cancelar, e o `log` da receita para mostrar a saída. Quem constrói
+a lista de entradas e o tamanho do array fica por conta do script.
+
+### Regras inegociáveis (NPAD)
+
+- **Uma só conexão SSH** (`ControlMaster=auto`, `ControlPersist=600`) para
+  tudo, com no máximo dois canais: um para transferências e streaming, outro
+  para consultas curtas. Se o servidor recusar o segundo, o fishell cai para
+  modo serial.
+- **Conexão recusada** (`ssh` sai com 255 sem "Permission denied") bloqueia o
+  destino por **30 minutos**, sem nova tentativa. "Permission denied" é falha de
+  autenticação: para a atualização automática até uma atualização forçada.
+- **Nada apaga no cluster.** `rsync` sempre `-a -s`; nunca `--delete` nem
+  `--remove-source-files`; nenhum `rm` remoto.
+- Intervalos: `local` a cada 3 s, NPAD a cada 60 s.
+- O fishell não guarda credencial. Config em `~/.config/fishell/`
+  (`FISHELL_CONFIG_DIR`), estado em `~/.local/state/fishell/`
+  (`FISHELL_STATE_DIR`: `estado.db`, `jobs/`, `ctl/`, `vigia.lock`,
+  `vigia.log`).
+- Limitação conhecida: um `FISHELL_STATE_DIR` longo estoura o limite de 108
+  bytes do caminho do socket SSH (`ctl/`). O caminho padrão cabe.
+
+### Testes
+
+Da raiz do repo, com o ambiente do projeto ativo:
+
+```bash
+uv sync                  # instala textual e as ferramentas de teste
+uv run pytest -q         # toda a suíte (sem rede)
+uv run pytest -q src/python/tests/test_slurm.py   # um arquivo
+```
+
+A suíte não usa rede: os adaptadores são testados contra saídas gravadas
+(`tests/fixtures/`) e contra falsos, e o núcleo contra adaptadores falsos. O CI
+tem um job `python` que roda `uv sync --locked` e `uv run pytest -q`.
+
+**Regravar uma fixture:** rode o comando de leitura no destino (por exemplo
+`squeue`, `sinfo`, `sacct` no NPAD, pela conexão única e poucas vezes), salve a
+saída em `tests/fixtures/` e **troque o usuário real por `usuario` antes de
+salvar**: o repo é público. Confira com `grep` pelo login (sem imprimi-lo) antes
+de commitar.

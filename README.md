@@ -338,6 +338,136 @@ Dá para consultar sem abrir shell nenhum:
 
 ---
 
+## 7. Painel de jobs (versão Python, só Linux)
+
+Além do painel das partes 1 a 6, existe uma versão em Python (`3.0.0a1`, em
+desenvolvimento) que mostra **numa tela só os jobs de todos os destinos**: os
+do NPAD (via Slurm) e os da sua própria máquina. Ela não substitui o `fishell.sh`
+dos alunos, que continua igual. Por enquanto só roda em Linux.
+
+### Instalar
+
+Requer Python 3.11 ou mais novo e o [uv](https://docs.astral.sh/uv/). A partir
+do clone:
+
+```bash
+uv tool install .
+fishell --version
+```
+
+Para o NPAD funcionar, o alias `npad` precisa existir no `~/.ssh/config` (é o
+que o `setup` das partes anteriores faz) e a chave precisa estar carregada no
+`ssh-agent`: o painel nunca pergunta senha.
+
+### A tela
+
+`fishell` (ou `fishell menu`) abre o painel de jobs:
+
+```
+fishell  jobs
+┌ DESTINOS ──────────┐┌ todos os destinos ───────────────────────────────────┐
+│> todos          3  ││  DESTINO  PROJETO  JOB          ESTADO     LOG        │
+│  npad          ●   ││> npad     pose     kp-extract   ● 47/65    === DONE   │
+│  local         ●   ││  local    yolo     yolo-train   ✓ ok       mAP50 0.73 │
+└────────────────────┘└──────────────────────────────────────────────────────┘
+┌ log ao vivo ─────────────────────────────────────────────────────────────────┐
+│ node : gpunode2   GPU 0: NVIDIA A100-SXM4-80GB                               │
+└──────────────────────────────────────────────────────────────────────────────┘
+tab destinos/jobs  enter log cheio  n novo job  m montar  p trazer  c cancelar  q sair
+```
+
+| tecla | ação |
+| --- | --- |
+| `tab` | alterna o foco entre a lista de destinos e a de jobs |
+| `enter` | abre o log do job em tela cheia (`esc` volta) |
+| `n` | novo job: escolhe o projeto (pela receita), o destino e a partição |
+| `m` | monta o ambiente no destino, para o projeto do job destacado |
+| `p` | traz os resultados do job para a máquina local |
+| `c` | cancela o job (pede confirmação) |
+| `q` | sai |
+
+O destino `local` atualiza a cada 3 s; o NPAD, a cada 60 s.
+
+### Receita do projeto: `fishell.toml`
+
+Fica na raiz de cada projeto e diz ao fishell o que enviar, onde montar o
+ambiente e como submeter. Uma tabela por destino:
+
+```toml
+nome = "pose"
+
+[npad]
+remoto   = "/scratch/global/$USER/pose"
+enviar   = ["scripts/ -> code/", "configs/ -> configs/"]
+trazer   = ["outputs/keypoints/"]
+ambiente = "code/npad/setup_env.sh"
+job      = "code/npad/extract_array.sbatch"
+particao = "gpu-4-a100"
+
+[local]
+ambiente = "setup_env.sh"
+comando  = "python treina.py"
+```
+
+- `enviar` e `trazer` são listas de itens `"origem/ -> destino/"`; um texto sem
+  ` -> ` vale como o mesmo caminho nos dois lados. Para filtrar, use a forma
+  de tabela: `{ de = "videos/", para = "videos/", incluir = ["*.mp4"], excluir = ["*_low.mp4"] }`.
+- `job` aponta um `.sbatch`, que o fishell submete com `sbatch --parsable`.
+  `submeter` aponta um script do projeto que monta o que precisar e chama o
+  `sbatch`; ele deve **imprimir uma linha `fishell-job: <id>`** com o id do job,
+  e a receita precisa declarar também o `log`. `job` e `submeter` não se
+  combinam.
+- No destino `local`, `ambiente` e `comando` rodam na pasta do projeto, e o
+  `comando` numa sessão `tmux`.
+- Projetos sem receita aparecem na lista, mas não oferecem enviar, montar,
+  submeter nem trazer.
+
+### Comandos
+
+```bash
+fishell            # abre o painel de jobs
+fishell menu       # o mesmo
+fishell jobs       # lista os jobs em texto, uma vez, e sai
+fishell vigia      # o vigia de fim de job (normalmente automático)
+fishell --version
+```
+
+Depois de submeter um job, o fishell inicia o **vigia** sozinho: um processo
+que acompanha os jobs ativos, avisa com `notify-send` quando um termina ou
+falha e sai quando não há mais nenhum.
+
+### Configuração e estado
+
+Sem configuração, o fishell conhece dois destinos: `local` e `npad` (o alias
+SSH `npad`). Para ajustar, crie `~/.config/fishell/destinos.toml`:
+
+```toml
+projetos = ["~/work/pose", "~/work/yolo"]   # pastas com fishell.toml (a pasta atual também conta)
+
+[[destino]]
+nome = "npad"
+tipo = "slurm"
+ssh = "npad"
+particoes = ["gpu-4-a100", "amd-512"]
+```
+
+O estado (banco de jobs, log do vigia, sockets) fica em `~/.local/state/fishell/`.
+Os dois lugares podem ser trocados com `FISHELL_CONFIG_DIR` e `FISHELL_STATE_DIR`.
+
+### Como o fishell trata o NPAD
+
+- Uma só conexão SSH multiplexada serve para tudo, com no máximo dois canais
+  (um para transferências, outro para consultas curtas).
+- Se o servidor recusar a conexão, o destino fica **30 minutos** sem nenhuma
+  nova tentativa. Falha de autenticação para a atualização automática até você
+  forçar uma nova.
+- `rsync` sempre com `-a`, nunca com `--delete` nem `--remove-source-files`. O
+  fishell **não apaga nada no cluster**.
+- Jobs do `local` rodam em sessões `tmux` chamadas `fishell-<id>`; jobs com mais
+  de 24 h continuam na lista enquanto estiverem ativos.
+
+---
+
 ## Problemas comuns
 
 | Problema | Solução |
