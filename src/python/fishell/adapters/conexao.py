@@ -193,7 +193,7 @@ class Conexao:
     def rsync(
         self, origem: str, destino: str, t: Transferencia, saida: Saida | None = None
     ) -> Resultado:
-        argv = ["rsync", "-a", "-e", shlex.join(["ssh", *self.opcoes_ssh()])]
+        argv = ["rsync", "-a", "-s", "-e", shlex.join(["ssh", *self.opcoes_ssh()])]
         argv += [f"--include={i}" for i in t.incluir]
         argv += [f"--exclude={e}" for e in t.excluir]
         argv += [origem, destino]

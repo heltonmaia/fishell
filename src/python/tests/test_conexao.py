@@ -55,7 +55,7 @@ def test_rsync_nunca_apaga(tmp_path):
     c.rsync("npad:b/", "a/", Transferencia("b/", "a/"))
     assert len(chamadas) == 2
     for argv in chamadas:
-        assert argv[:2] == ["rsync", "-a"]
+        assert argv[:3] == ["rsync", "-a", "-s"]
         assert not {"--delete", "--remove-source-files"} & set(argv)
         assert not any(a.startswith("--delete") for a in argv)
     a = chamadas[0]
@@ -220,3 +220,4 @@ def test_saida_que_levanta_mata_o_filho(tmp_path):
     time.sleep(0.2)
     vivo = subprocess.run(["pgrep", "-f", "sleep 5.123"], capture_output=True)
     assert vivo.stdout == b""
+

@@ -154,6 +154,22 @@ def test_enviar_faz_mkdir_unico_e_um_rsync_por_transferencia(adaptador, conexao)
     assert saida is ignorar
 
 
+def test_enviar_remoto_com_espaco_sem_aspas_no_rsync(adaptador, conexao):
+    r = receita(remoto="/scratch/global/usuario/meu projeto",
+                enviar=(Transferencia("meus dados/", "dados/"),))
+    adaptador.enviar(r, ignorar)
+    assert shlex.quote("/scratch/global/usuario/meu projeto/dados/") in conexao.comandos[0]
+    assert conexao.rsyncs[0][1] == "npad:/scratch/global/usuario/meu projeto/dados/"
+
+
+def test_trazer_remoto_com_espaco_sem_aspas_no_rsync(adaptador, conexao, tmp_path):
+    r = Receita(tmp_path, "pose", {"npad": secao(
+        remoto="/scratch/global/usuario/meu projeto",
+        trazer=(Transferencia("meus dados/", "dados/"),))})
+    adaptador.trazer(r, ignorar)
+    assert conexao.rsyncs[0][0] == "npad:/scratch/global/usuario/meu projeto/meus dados/"
+
+
 def test_trazer_inverte_origem_e_destino(adaptador, conexao, tmp_path):
     r = Receita(tmp_path, "pose", {"npad": secao(trazer=(Transferencia("out/", "resultados/"),))})
     adaptador.trazer(r, ignorar)

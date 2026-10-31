@@ -154,14 +154,14 @@ class AdaptadorSlurm:
             raise RuntimeError(r.erro.strip() or "não criei as pastas remotas")
         for t in secao.enviar:
             origem = os.path.join(str(receita.raiz), t.de)
-            destino = f"{self.conexao.alias}:{_q(f'{base}/{t.para}')}"
+            destino = f"{self.conexao.alias}:{base}/{t.para}"
             self._rsync(origem, destino, t, saida)
 
     def trazer(self, receita: Receita, saida: Saida) -> None:
         secao = self._secao(receita)
         base = self._base(secao)
         for t in secao.trazer:
-            origem = f"{self.conexao.alias}:{_q(f'{base}/{t.de}')}"
+            origem = f"{self.conexao.alias}:{base}/{t.de}"
             destino = os.path.join(str(receita.raiz), t.para)
             pasta = destino if t.para.endswith("/") else os.path.dirname(destino)
             os.makedirs(pasta, exist_ok=True)
