@@ -8,7 +8,6 @@ import threading
 import time
 from pathlib import Path
 
-from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal
@@ -59,10 +58,9 @@ class LogScreen(Screen):
     def on_mount(self) -> None:
         log = self.query_one("#log-cheio", RichLog)
         log.border_title = textos.TUI_LOG_CHEIO.format(destino=self._job.destino, job=self._job.id)
-        self._carregar()
+        self.app._em_fundo(self._carregar)
 
-    @work(thread=True, exclusive=True, group="log-cheio")
-    def _carregar(self) -> None:
+    def _carregar(self) -> None:  # thread de fundo
         try:
             linhas = self._hub.log(self._job, LINHAS_LOG_CHEIO)
         except Exception as e:  # noqa: BLE001
@@ -70,6 +68,8 @@ class LogScreen(Screen):
         self.app._na_principal(self._pintar, linhas)
 
     def _pintar(self, linhas: list[str]) -> None:
+        if not self.is_attached:
+            return  # a tela já foi fechada
         log = self.query_one("#log-cheio", RichLog)
         log.clear()
         for linha in linhas:
@@ -99,6 +99,7 @@ class FishellApp(App):
         self._filtro: str | None = None  # None = todos
         self._trava_fundo = threading.Lock()
         self._fundo: set[threading.Thread] = set()
+        self._acoes: set[threading.Thread] = set()  # enviar, submeter, cancelar...
         self._em_voo: set[str] = set()  # destinos com atualização em andamento
         self._log_chave: str | None = None
         self._log_t = 0.0
@@ -122,10 +123,9 @@ class FishellApp(App):
         self._montar_destinos()
         self.set_interval(1.0, self.atualizar_agora)
         self.atualizar_agora()
-        self._garantir_vigia()
+        self._em_fundo(self._garantir_vigia)
 
-    @work(thread=True, group="vigia")
-    def _garantir_vigia(self) -> None:
+    def _garantir_vigia(self) -> None:  # thread de fundo
         # o vigia não sobrevive a um reboot ou logout: o painel o reinicia ao abrir
         try:
             erro = self.hub.garantir_vigia_se_preciso()
@@ -138,10 +138,11 @@ class FishellApp(App):
         self.notify(mensagem, severity="warning")
 
     # --- trabalho em segundo plano -------------------------------------
-    def _em_fundo(self, fn, *args) -> None:
+    def _em_fundo(self, fn, *args, acao: bool = False) -> None:
         """Roda fn(*args) numa thread daemon: sair nunca espera por ela.
 
-        As atualizações da tela voltam pela _na_principal, como nos workers.
+        As atualizações da tela voltam pela _na_principal. `acao=True` marca
+        uma ação do usuário (envio, script, cancelamento): sair pede confirmação.
         """
         contexto = contextvars.copy_context()  # o `self.app` dos widgets vem daqui
 
@@ -153,16 +154,23 @@ class FishellApp(App):
             finally:
                 with self._trava_fundo:
                     self._fundo.discard(threading.current_thread())
+                    self._acoes.discard(threading.current_thread())
 
         t = threading.Thread(target=alvo, daemon=True, name=f"fishell-{fn.__name__}")
         with self._trava_fundo:
             self._fundo.add(t)
+            if acao:
+                self._acoes.add(t)
         t.start()
 
     def em_fundo(self) -> bool:
         """Há thread de fundo em andamento (os testes esperam por elas)."""
         with self._trava_fundo:
             return bool(self._fundo)
+
+    def acao_em_andamento(self) -> bool:
+        with self._trava_fundo:
+            return bool(self._acoes)
 
     # --- atualização ---------------------------------------------------
     def atualizar_agora(self, forcar: bool = False) -> None:
@@ -286,9 +294,27 @@ class FishellApp(App):
     def check_action(self, action: str, parameters) -> bool | None:
         # só a tela de jobs usa as teclas do app; no resto (modais, log cheio) o
         # tab/enter são do campo e as ações do próprio Textual (focus_next) seguem
-        if action in _ACOES_DO_PAINEL and len(self.screen_stack) > 1:
-            return False
+        if len(self.screen_stack) > 1:
+            if action == "quit":
+                # só o ctrl+q (prioritário) chega aqui de um modal; o q do modal é
+                # do SaidaScreen. Vale só com ação rodando, que não deixa fechá-lo
+                return self.acao_em_andamento() and not isinstance(self.screen, ConfirmarScreen)
+            if action in _ACOES_DO_PAINEL:
+                return False
         return True
+
+    async def action_quit(self) -> None:
+        self.pedir_saida()
+
+    def pedir_saida(self) -> None:
+        """Sai já; com ação em andamento, pergunta antes (e sai sem esperá-la)."""
+        if not self.acao_em_andamento():
+            self.exit()
+            return
+        self.push_screen(
+            ConfirmarScreen(textos.ACAO_SAIR_EM_ANDAMENTO),
+            lambda sim: self.exit() if sim else None,
+        )
 
     def action_abrir_log(self) -> None:
         job = self._job_destacado()
@@ -330,10 +356,9 @@ class FishellApp(App):
         self.push_screen(ConfirmarScreen(pergunta), lambda sim: self._cancelar(job) if sim else None)
 
     def _cancelar(self, job: Job) -> None:
-        self._rodar_cancelar(job)
+        self._em_fundo(self._rodar_cancelar, job, acao=True)
 
-    @work(thread=True, group="cancelar")
-    def _rodar_cancelar(self, job: Job) -> None:
+    def _rodar_cancelar(self, job: Job) -> None:  # thread de fundo
         try:
             self.hub.cancelar(job.destino, job.id)
         except Exception as e:  # noqa: BLE001
@@ -362,10 +387,9 @@ class FishellApp(App):
         self._log_chave = chave
         self._log_t = agora
         log.border_title = textos.TUI_LOG_TITULO.format(destino=job.destino, job=job.id)
-        self._carregar_log(job, chave)
+        self._em_fundo(self._carregar_log, job, chave)
 
-    @work(thread=True, exclusive=True, group="log")
-    def _carregar_log(self, job: Job, chave: str) -> None:
+    def _carregar_log(self, job: Job, chave: str) -> None:  # thread de fundo
         try:
             linhas = self.hub.log(job, LINHAS_LOG)
         except Exception as e:  # noqa: BLE001

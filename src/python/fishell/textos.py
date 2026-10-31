@@ -77,3 +77,8 @@ ACAO_AMBIENTE_FALHOU = "o ambiente saiu com código {codigo}"
 ACAO_ERRO = "erro: {erro}"
 ACAO_SUBMETIDO = "ok: job {job} submetido"
 ACAO_EXECUTANDO = "{acao}..."
+ACAO_EM_ANDAMENTO = "ação em andamento: espere terminar para fechar"
+ACAO_SAIR_EM_ANDAMENTO = (
+    "Ação em andamento; sair mesmo assim? "
+    "O que já começou (envio, script, job) pode terminar sozinho."
+)

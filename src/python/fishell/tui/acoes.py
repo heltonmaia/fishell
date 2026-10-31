@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from collections.abc import Callable
 
-from textual import on, work
+from textual import on
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
@@ -54,7 +54,10 @@ class ConfirmarScreen(ModalScreen[bool]):
 class SaidaScreen(ModalScreen):
     """Base: um RichLog e a execução de uma ação por vez numa thread."""
 
-    BINDINGS = [Binding("escape", "fechar", show=False)]
+    BINDINGS = [
+        Binding("escape", "fechar", show=False),
+        Binding("q", "sair", show=False),
+    ]
 
     def __init__(self, hub: Hub) -> None:
         super().__init__()
@@ -62,6 +65,20 @@ class SaidaScreen(ModalScreen):
         self._ocupado = False
 
     def action_fechar(self) -> None:
+        self._fechar_se_livre()
+
+    def action_sair(self) -> None:
+        # as teclas do app não chegam a um modal; parado, o modal fecha no esc,
+        # mas com a ação rodando o q precisa valer aqui (pede confirmação)
+        if self.app.acao_em_andamento():
+            self.app.pedir_saida()
+
+    def _fechar_se_livre(self) -> None:
+        # a ação segue numa thread que não dá para interromper: o modal fica
+        # aberto até ela terminar, para a saída não sumir no meio
+        if self._ocupado:
+            self.app.notify(textos.ACAO_EM_ANDAMENTO)
+            return
         self.dismiss()
 
     # chamado na thread de trabalho
@@ -86,10 +103,9 @@ class SaidaScreen(ModalScreen):
             return
         self._estado_ocupado(True)
         self._linha(textos.ACAO_EXECUTANDO.format(acao=titulo))
-        self._rodar(fn)
+        self.app._em_fundo(self._rodar, fn, acao=True)
 
-    @work(thread=True, group="acao")
-    def _rodar(self, fn: Callable[[Callable[[str], None]], str | None]) -> None:
+    def _rodar(self, fn: Callable[[Callable[[str], None]], str | None]) -> None:  # thread
         try:
             final = fn(self._linha_de_fora) or textos.ACAO_OK
             erro = None
@@ -129,7 +145,7 @@ class TrazerScreen(SaidaScreen):
 
     @on(Button.Pressed, "#fechar")
     def _fechar(self) -> None:
-        self.dismiss()
+        self._fechar_se_livre()
 
 
 class NovoJobScreen(SaidaScreen):
@@ -257,7 +273,7 @@ class NovoJobScreen(SaidaScreen):
     # --- ações ---------------------------------------------------------
     @on(Button.Pressed, "#fechar")
     def _fechar(self) -> None:
-        self.dismiss()
+        self._fechar_se_livre()
 
     @on(Button.Pressed, "#enviar")
     def _enviar(self) -> None:

@@ -342,3 +342,115 @@ async def test_ambiente_com_codigo_diferente_de_zero_e_erro(tmp_path):
         linhas = [l.text for l in tela.query_one(RichLog).lines]
         assert linhas[-1] == esperado
         assert (esperado, "error") in avisos
+
+
+# --- F7: ação em andamento: o modal fica, sair pergunta e não espera ----
+import asyncio
+import threading
+import time
+
+
+class _Travado(AdaptadorFalso):
+    def __init__(self, soltar, **kw):
+        super().__init__(**kw)
+        self.soltar = soltar
+
+    def enviar(self, receita, saida):
+        self.chamadas.append(("enviar", (receita, saida)))
+        self.soltar.wait(10)
+
+
+def _hub_travado(tmp_path, soltar):
+    npad = _Travado(soltar, nome="npad",
+                    jobs=[Job("npad", "1", "kp", EstadoJob.RODANDO, projeto="pose")],
+                    recursos=[Recurso("gpu-4-a100", 1, 2)])
+    local = AdaptadorFalso(nome="local", capacidades=SEM_ENVIO)
+    return Hub({"npad": npad, "local": local}, Estado(tmp_path / "e.db"), [_receita()])
+
+
+async def _comecar_envio(app, pilot):
+    tela = await _abrir_modal(app, pilot)
+    await _escolher(tela, pilot)
+    tela.query_one("#enviar", Button).press()
+    for _ in range(200):
+        if _chamadas(app.hub, "npad", "enviar"):
+            break
+        await pilot.pause(0.01)
+    assert _chamadas(app.hub, "npad", "enviar")
+    return tela
+
+
+async def test_esc_e_fechar_durante_acao_mantem_o_modal(tmp_path):
+    soltar = threading.Event()
+    app = FishellApp(_hub_travado(tmp_path, soltar))
+    avisos = []
+    app.notify = lambda msg, **kw: avisos.append(msg)
+    try:
+        async with app.run_test(size=(100, 40)) as pilot:
+            tela = await _comecar_envio(app, pilot)
+            await pilot.press("escape")
+            await pilot.pause()
+            assert app.screen is tela
+            tela.query_one("#fechar", Button).press()
+            await pilot.pause()
+            assert app.screen is tela
+            assert avisos.count(textos.ACAO_EM_ANDAMENTO) == 2
+            soltar.set()
+            await _esperar(app, pilot)
+            await pilot.press("escape")
+            await pilot.pause()
+            assert not isinstance(app.screen, NovoJobScreen)
+    finally:
+        soltar.set()
+
+
+async def test_q_com_acao_em_andamento_pede_confirmacao(tmp_path):
+    soltar = threading.Event()
+    app = FishellApp(_hub_travado(tmp_path, soltar))
+    try:
+        async with app.run_test(size=(100, 40)) as pilot:
+            tela = await _comecar_envio(app, pilot)
+            await pilot.press("q")
+            await pilot.pause()
+            assert isinstance(app.screen, ConfirmarScreen)
+            assert textos.ACAO_SAIR_EM_ANDAMENTO in str(app.screen.query_one("#pergunta").render())
+            app.screen.query_one("#nao", Button).press()
+            await pilot.pause()
+            assert app.screen is tela and app.is_running
+            soltar.set()
+            await _esperar(app, pilot)
+    finally:
+        soltar.set()
+
+
+async def test_sair_nao_espera_acao_travada(tmp_path):
+    soltar = threading.Event()
+    app = FishellApp(_hub_travado(tmp_path, soltar))
+    try:
+        async with app.run_test(size=(100, 40)) as pilot:
+            await _comecar_envio(app, pilot)
+            await pilot.press("q")
+            await pilot.pause()
+            assert isinstance(app.screen, ConfirmarScreen)
+            t0 = time.monotonic()
+            app.screen.query_one("#sim", Button).press()
+            for _ in range(200):
+                if not app.is_running:
+                    break
+                await asyncio.sleep(0.01)
+            assert not app.is_running
+        assert time.monotonic() - t0 < 2
+        assert not soltar.is_set()  # o envio ainda estava preso quando o app saiu
+        presas = [t for t in threading.enumerate() if t.name.startswith("fishell-")]
+        assert presas and all(t.daemon for t in presas)
+    finally:
+        soltar.set()
+
+
+async def test_q_em_modal_parado_nao_sai(tmp_path):
+    app = FishellApp(_hub(tmp_path))
+    async with app.run_test(size=(100, 40)) as pilot:
+        tela = await _abrir_modal(app, pilot)
+        await pilot.press("q")
+        await pilot.pause()
+        assert app.is_running and app.screen is tela
