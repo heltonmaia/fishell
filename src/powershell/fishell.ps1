@@ -907,14 +907,16 @@ function Menu-Loop {
     $sel = 1
     # indice da linha destacada -> tecla equivalente
     $opts = @('1','2','3','4','5','6','7','l','0')
-    while ($true) {
+    # Rotulo necessario: dentro de um switch, `continue` sozinho so' sai do
+    # switch, e a seta caia no default do segundo como opcao invalida.
+    :menu while ($true) {
         if (-not [Console]::IsOutputRedirected) { Clear-Host }
         Draw-Panel -Flash $flash -Sel $sel
         $flash = ''
         $opt = Read-MenuKey
         switch ($opt) {
-            'up'    { if ($sel -gt 1) { $sel-- } else { $sel = $opts.Count }; continue }
-            'down'  { if ($sel -lt $opts.Count) { $sel++ } else { $sel = 1 }; continue }
+            'up'    { if ($sel -gt 1) { $sel-- } else { $sel = $opts.Count }; continue menu }
+            'down'  { if ($sel -lt $opts.Count) { $sel++ } else { $sel = 1 }; continue menu }
             'enter' { $opt = $opts[$sel - 1] }
             'quit'  { $opt = '0' }
         }

@@ -84,6 +84,14 @@ read-only, explodia no `keygen`) e `$null -notmatch` num `~/.ssh/config` vazio,
 que fazia o `setup` nunca registrar o alias no Windows. Por isso o CI
 **executa** o port PowerShell.
 
+**No PowerShell, `continue` dentro de `switch` não volta ao laço.** O `switch`
+é ele mesmo um laço sobre a entrada, e `continue` ou `break` sem rótulo agem
+nele, não no `while` em volta. Foi assim que cada seta do menu passou a cair
+no `default` do segundo `switch` e a aparecer como "opção inválida: up" no
+Windows, enquanto no bash, onde `case` não é laço, funcionava. Para controlar o
+laço de dentro de um `switch`, rotule-o (`:menu while`, `continue menu`). O
+`Test-Runtime.ps1` passa pelo menu com as setas.
+
 **A chave pública vai colada num formulário oficial.** O fishell **não gera**
 a chave, isso é um `ssh-keygen -t rsa`, no terminal, como manda a documentação
 do NPAD. Mas ele *mostra* a pública para você copiar, e `validate_pubkey` /

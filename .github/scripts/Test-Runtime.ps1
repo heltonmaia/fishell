@@ -28,6 +28,14 @@ function Assert-Match {
     }
     Write-Host "  ok: $What"
 }
+function Assert-NoMatch {
+    param([string]$Text, [string]$Pattern, [string]$What)
+    if ($Text -match $Pattern) {
+        Write-Host "--- saida ---"; Write-Host $Text; Write-Host "-------------"
+        throw "$What : nao esperava /$Pattern/"
+    }
+    Write-Host "  ok: $What"
+}
 
 Remove-Item -Force config.ps1, .ssh/id_rsa, .ssh/id_rsa.pub -ErrorAction SilentlyContinue
 
@@ -85,6 +93,18 @@ Write-Host "  ok: 1 bloco no ~/.ssh/config"
 
 Write-Host 'status'
 Assert-Match (Invoke-Fishell @('status')) 'fishell v' 'status'
+
+# Setas no menu. Sem TTY o menu le uma linha por vez, e `up`/`enter` seguem o
+# mesmo caminho das teclas: sobe de [1] para [0] (a lista e' circular) e
+# confirma. O bug que isto pega: `continue` dentro de um switch so' sai do
+# switch, e cada seta caia no default do segundo como opcao invalida.
+Write-Host 'menu: setas navegam sem virar opcao invalida'
+$env:FISHELL_LANG = 'en'
+$out = 'up', 'enter' | & pwsh -NoProfile -File $script 2>&1 | Out-String
+$env:FISHELL_LANG = 'pt'
+Assert-Match   $out '> \[0\]'            'seta para cima leva o destaque de [1] a [0]'
+Assert-Match   $out 'session terminated' 'enter na linha [0] sai'
+Assert-NoMatch $out 'invalid opcode'     'seta nao vira opcao invalida'
 
 Remove-Item -Force config.ps1, .ssh/id_rsa, .ssh/id_rsa.pub -ErrorAction SilentlyContinue
 Write-Host 'runtime do ps1: ok'
