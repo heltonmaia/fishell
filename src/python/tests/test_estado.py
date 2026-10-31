@@ -40,3 +40,24 @@ def test_registrar_repetido_nao_reinicia(tmp_path):
     e.registrar("npad", "1", "p", "n", None, None)
     assert e.ativos() == []
     assert e.atualizar("npad", "1", EstadoJob.OK) is False
+
+
+def test_terminal_nao_e_sobrescrito(tmp_path):
+    e = Estado(tmp_path / "e.db")
+    e.registrar("npad", "1", "p", "n", None, None)
+    assert e.atualizar("npad", "1", EstadoJob.OK) is True
+    assert e.atualizar("npad", "1", EstadoJob.RODANDO) is False
+    assert e.atualizar("npad", "1", EstadoJob.OK) is False
+    assert e.ativos() == []
+    assert e.recentes("npad", datetime.now() - timedelta(hours=1))[0].estado == EstadoJob.OK
+
+
+def test_corrida_entre_instancias_so_uma_avisa(tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+
+    arq = tmp_path / "e.db"
+    Estado(arq).registrar("npad", "1", "p", "n", None, None)
+    estados = [Estado(arq) for _ in range(8)]
+    with ThreadPoolExecutor(8) as ex:
+        res = list(ex.map(lambda x: x.atualizar("npad", "1", EstadoJob.OK), estados))
+    assert res.count(True) == 1

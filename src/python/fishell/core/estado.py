@@ -80,19 +80,19 @@ class Estado:
             return [_registro(l) for l in linhas]
 
     def atualizar(self, destino: str, job_id: str, estado: EstadoJob) -> bool:
-        """True só na primeira vez que o job chega a um estado terminal."""
+        """True só na primeira vez que o job chega a um estado terminal.
+
+        Uma única UPDATE condicional: estado terminal nunca é sobrescrito e,
+        entre processos, só um chamador consegue a transição.
+        """
+        terminais = [e.value for e in TERMINAIS]
         with self._con() as con:
-            linha = con.execute(
-                "SELECT estado FROM jobs WHERE destino = ? AND job_id = ?", (destino, job_id)
-            ).fetchone()
-            if linha is None:
-                return False
-            antes = EstadoJob(linha[0])
-            con.execute(
-                "UPDATE jobs SET estado = ? WHERE destino = ? AND job_id = ?",
-                (estado.value, destino, job_id),
+            cur = con.execute(
+                "UPDATE jobs SET estado = ? WHERE destino = ? AND job_id = ? "
+                f"AND estado NOT IN ({','.join('?' * len(terminais))})",
+                (estado.value, destino, job_id, *terminais),
             )
-            return estado in TERMINAIS and antes not in TERMINAIS
+            return cur.rowcount > 0 and estado in TERMINAIS
 
     def marcar_notificado(self, destino: str, job_id: str) -> None:
         with self._con() as con:
