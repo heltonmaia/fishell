@@ -27,7 +27,7 @@ def montar_hub(
     adaptadores: dict[str, Adaptador] = {}
     for d in cfg.destinos:
         if d.tipo == "local":
-            adaptadores[d.nome] = AdaptadorLocal(estado, dir_est / "jobs")
+            adaptadores[d.nome] = AdaptadorLocal(estado, dir_est / "jobs", tmux_socket="fishell")
         elif d.tipo == "slurm":
             adaptadores[d.nome] = AdaptadorSlurm(
                 d.nome, Conexao(d.ssh or d.nome, dir_est / "ctl"), estado, d.particoes

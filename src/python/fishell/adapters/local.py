@@ -50,7 +50,9 @@ class AdaptadorLocal:
 
     # --- apoio -------------------------------------------------------
     def _tmux(self, *args: str):
-        pre = ["-L", self._socket] if self._socket else []
+        # servidor próprio e sem o tmux.conf do usuário (um destroy-unattached
+        # dele, por exemplo, mataria o job assim que a sessão nasce)
+        pre = ["-L", self._socket, "-f", "/dev/null"] if self._socket else []
         return self._executar(["tmux", *pre, *args], 30, None)
 
     def _secao(self, receita: Receita) -> SecaoReceita:
@@ -102,9 +104,12 @@ class AdaptadorLocal:
         return texto or None
 
     def listar_jobs(self) -> list[Job]:
+        # o registro antes das sessões: um job que outro processo submete no
+        # meio já tem sessão quando entra no registro, e não vira "sumiu"
+        registros = self._registros()
         vivas = self._sessoes()
         jobs: list[Job] = []
-        for reg in self._registros():
+        for reg in registros:
             motivo = ""
             codigo = self._codigo_saida(reg.job_id)
             if reg.estado in TERMINAIS:
@@ -194,8 +199,9 @@ class AdaptadorLocal:
         return id_
 
     def cancelar(self, job_id: str) -> None:
-        self._tmux("kill-session", "-t", f"fishell-{job_id}")
+        # grava antes de matar: quem listar no meio não vê "sessão sumiu"
         self.estado.atualizar(self.nome, job_id, EstadoJob.CANCELADO)
+        self._tmux("kill-session", "-t", f"fishell-{job_id}")
 
     def log(self, job: Job, linhas: int = 40) -> list[str]:
         if not job.log:

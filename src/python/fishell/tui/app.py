@@ -25,7 +25,7 @@ LINHAS_LOG = 40
 LINHAS_LOG_CHEIO = 400
 LARGURA_LINHA = 24
 _ACOES_DO_PAINEL = frozenset(
-    {"abrir_log", "alternar_foco", "novo_job", "montar", "trazer", "cancelar", "quit"}
+    {"abrir_log", "alternar_foco", "novo_job", "montar", "trazer", "cancelar", "atualizar", "quit"}
 )
 _ATIVOS = (("●", EstadoJob.RODANDO), ("◌", EstadoJob.FILA))
 
@@ -89,6 +89,7 @@ class FishellApp(App):
         Binding("m", "montar", textos.TUI_TECLA_MONTAR),
         Binding("p", "trazer", textos.TUI_TECLA_TRAZER),
         Binding("c", "cancelar", textos.TUI_TECLA_CANCELAR),
+        Binding("r", "atualizar", textos.TUI_TECLA_ATUALIZAR),
         Binding("q", "quit", textos.TUI_TECLA_SAIR),
     ]
 
@@ -405,6 +406,11 @@ class FishellApp(App):
             log.write(linha)
 
     # --- teclas --------------------------------------------------------
+    def action_atualizar(self) -> None:
+        # forçado: ignora o intervalo e volta a tentar um destino parado por
+        # falha de autenticação (o bloqueio de recusa continua valendo)
+        self.atualizar_agora(forcar=True)
+
     def action_alternar_foco(self) -> None:
         barra = self.query_one("#destinos", OptionList)
         if barra.has_focus:

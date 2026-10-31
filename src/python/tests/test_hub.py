@@ -229,6 +229,7 @@ def test_montar_hub(tmp_path):
     )
     h = montar_hub(cfg, est, cwd)
     assert isinstance(h.adaptadores["local"], AdaptadorLocal)
+    assert h.adaptadores["local"]._socket == "fishell"  # servidor tmux só do fishell
     npad = h.adaptadores["npad"]
     assert isinstance(npad, AdaptadorSlurm)
     assert npad.conexao.alias == "meunpad" and npad.conexao.dir_ctl == est / "ctl"

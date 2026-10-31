@@ -283,3 +283,10 @@ def test_familias_de_erro(tmp_path, erro, minutos):
     with pytest.raises(Indisponivel) as e:
         c.comando("squeue")
     assert e.value.ate == T0 + timedelta(minutes=minutos)
+
+
+# --- F9: ~ sozinho ------------------------------------------------------
+def test_resolver_til_sozinho_vira_home(tmp_path):
+    c, chamadas, _ = montar(tmp_path, [Resultado(0, "/home/usuario", "")])
+    assert c.resolver("~") == "/home/usuario"
+    assert chamadas[0][-1] == 'printf %s "$HOME"'

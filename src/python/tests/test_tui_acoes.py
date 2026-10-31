@@ -454,3 +454,20 @@ async def test_q_em_modal_parado_nao_sai(tmp_path):
         await pilot.press("q")
         await pilot.pause()
         assert app.is_running and app.screen is tela
+
+
+# --- F9: partição e array só no modo job ------------------------------
+async def test_modo_script_esconde_particao_e_array(tmp_path):
+    secoes = {"npad": _secao("npad", submeter="go.sh", log="l.out", particao="gpu-4-a100")}
+    hub = _hub(tmp_path, receitas=[Receita(Path("/p"), "pose", secoes)])
+    app = FishellApp(hub)
+    async with app.run_test(size=(100, 40)) as pilot:
+        tela = await _abrir_modal(app, pilot)
+        await _escolher(tela, pilot)
+        assert not tela.query_one("#particao", Select).display
+        assert not tela.query_one("#array", Input).display
+        assert tela.query_one("#submeter", Button).display
+        tela.query_one("#submeter", Button).press()
+        await _esperar(app, pilot)
+        [(_, (_r, particao, array, _s))] = _chamadas(hub, "npad", "submeter")
+        assert (particao, array) == (None, None)

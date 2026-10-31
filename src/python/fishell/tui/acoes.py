@@ -204,13 +204,13 @@ class NovoJobScreen(SaidaScreen):
         ad = self._hub.adaptadores.get(self._destino() or "")
         return frozenset(ad.capacidades) if ad is not None else frozenset()
 
-    def _slurm(self) -> bool:
+    def _modo_job(self) -> bool:
+        """Receita com `job` (.sbatch): só aqui partição e array valem.
+
+        No modo script (`submeter`) o próprio script escolhe os dois.
+        """
         s = self._secao()
-        return (
-            s is not None
-            and "submeter" in self._capacidades()
-            and (s.job is not None or s.submeter is not None)
-        )
+        return s is not None and "submeter" in self._capacidades() and s.job is not None
 
     def _projeto_mudou(self) -> None:
         r = self._receita()
@@ -231,7 +231,7 @@ class NovoJobScreen(SaidaScreen):
     def _destino_mudou(self) -> None:
         sel = self.query_one("#particao", Select)
         s = self._secao()
-        if self._slurm() and s is not None:
+        if self._modo_job() and s is not None:
             recursos = self._visao.recursos.get(self._destino() or "", [])
             sel.set_options(
                 (
@@ -251,9 +251,9 @@ class NovoJobScreen(SaidaScreen):
             return
         s = self._secao()
         caps = self._capacidades()
-        slurm = self._slurm()
-        self.query_one("#particao", Select).display = slurm
-        self.query_one("#array", Input).display = slurm and s is not None and s.job is not None
+        modo_job = self._modo_job()
+        self.query_one("#particao", Select).display = modo_job
+        self.query_one("#array", Input).display = modo_job
         self.query_one("#enviar-antes", Checkbox).display = "enviar" in caps and s is not None
         r = self._receita()
         pronto = s is not None and r is not None and not r.erro and not self._ocupado
@@ -307,14 +307,13 @@ class NovoJobScreen(SaidaScreen):
         if not (p and d and s):
             return
         particao = array = None
-        if self._slurm():
+        if self._modo_job():
             v = self.query_one("#particao", Select).value
             particao = v if isinstance(v, str) else None
-            if s.job is not None:
-                array = self.query_one("#array", Input).value.strip() or None
-                if array is not None and not _ARRAY.match(array):
-                    self._linha(textos.ACAO_ARRAY_INVALIDO)
-                    return
+            array = self.query_one("#array", Input).value.strip() or None
+            if array is not None and not _ARRAY.match(array):
+                self._linha(textos.ACAO_ARRAY_INVALIDO)
+                return
         antes = self.query_one("#enviar-antes", Checkbox).value
 
         def rodar(saida):

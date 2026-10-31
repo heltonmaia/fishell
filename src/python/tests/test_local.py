@@ -97,7 +97,11 @@ def test_socket_do_tmux(estado, tmp_path):
     f = Falso()
     a = novo(estado, tmp_path, f, tmux_socket="sock")
     a.submeter(receita(comando="true"), None, None, ignorar)
-    assert f.chamadas[-1][:3] == ["tmux", "-L", "sock"]
+    a.listar_jobs()
+    a.cancelar("x")
+    assert len(f.chamadas) == 3
+    for argv in f.chamadas:
+        assert argv[:5] == ["tmux", "-L", "sock", "-f", "/dev/null"]
 
 
 def test_id_repetido_ganha_sufixo(estado, tmp_path):
@@ -238,3 +242,34 @@ def test_job_real_no_tmux(tmp_path):
         assert estados == ["falhou", "ok", "ok"]
     finally:
         executar_subprocess(["tmux", "-L", sock, "kill-server"], 10, None)
+
+
+# --- F9: corridas entre processos ---------------------------------------
+def test_listar_le_o_registro_antes_das_sessoes(estado, tmp_path):
+    """Um job submetido por outro processo entre as duas leituras não vira falha."""
+
+    def executar(argv, timeout, saida):
+        if "list-sessions" in argv:
+            estado.registrar("local", "lnovo", "proj", "proj", None, None)  # outro processo
+            return Resultado(0, "fishell-lvelho\n", "")
+        return Resultado(0, "", "")
+
+    a = novo(estado, tmp_path, executar)
+    estado.registrar("local", "lvelho", "proj", "proj", None, None)
+    a.listar_jobs()
+    estados = {r.job_id: r.estado for r in estado.recentes("local", datetime.min)}
+    assert estados == {"lvelho": EstadoJob.RODANDO, "lnovo": EstadoJob.FILA}
+
+
+def test_cancelar_grava_antes_de_matar_a_sessao(estado, tmp_path):
+    visto = []
+
+    def executar(argv, timeout, saida):
+        if "kill-session" in argv:
+            visto.append(reg_estado(estado, "l9"))
+        return Resultado(0, "", "")
+
+    a = novo(estado, tmp_path, executar)
+    estado.registrar("local", "l9", "proj", "proj", None, None)
+    a.cancelar("l9")
+    assert visto == [EstadoJob.CANCELADO]

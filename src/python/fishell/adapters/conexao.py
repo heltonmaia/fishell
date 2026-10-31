@@ -229,7 +229,9 @@ class Conexao:
         if caminho in self._cache:
             return self._cache[caminho]
         original = caminho
-        if caminho.startswith("~/"):
+        if caminho == "~":
+            caminho = "$HOME"
+        elif caminho.startswith("~/"):
             caminho = "$HOME/" + caminho[2:]
         seguro = (
             caminho.replace("\\", "\\\\")

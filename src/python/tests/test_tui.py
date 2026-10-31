@@ -364,3 +364,31 @@ async def test_npad_travado_nao_para_o_local(tmp_path):
             assert len(_celulas(app.query_one("#jobs", DataTable))) == 2
     finally:
         soltar.set()
+
+
+# --- F9: r força a atualização de todos os destinos --------------------
+async def test_r_forca_atualizacao_e_libera_sem_acesso(tmp_path):
+    from fishell.adapters.base import ErroAutenticacao
+
+    npad = AdaptadorFalso(nome="npad", erro=ErroAutenticacao(),
+                          jobs=[Job("npad", "1", "kp", EstadoJob.RODANDO)])
+    local = AdaptadorFalso(nome="local", jobs=[Job("local", "9", "yolo", EstadoJob.OK)])
+    app = FishellApp(_hub(tmp_path, npad, local))
+    async with app.run_test(size=(100, 30)) as pilot:
+        await _esperar(app, pilot)
+        ativos = app.active_bindings
+        assert ativos["r"].binding.description == textos.TUI_TECLA_ATUALIZAR
+        assert ativos["r"].binding.show
+        assert "sem acesso" in _prompts(app)
+        n_npad = len([c for c in npad.chamadas if c[0] == "listar_jobs"])
+        n_local = len([c for c in local.chamadas if c[0] == "listar_jobs"])
+        npad.erro = None
+        app.atualizar_agora()  # sem forçar: o npad continua parado
+        await _esperar(app, pilot)
+        assert len([c for c in npad.chamadas if c[0] == "listar_jobs"]) == n_npad
+        await pilot.press("r")
+        await _esperar(app, pilot)
+        assert len([c for c in npad.chamadas if c[0] == "listar_jobs"]) == n_npad + 1
+        assert len([c for c in local.chamadas if c[0] == "listar_jobs"]) > n_local
+        assert {l[2] for l in _celulas(app.query_one("#jobs", DataTable))} == {"kp", "yolo"}
+        assert "sem acesso" not in _prompts(app)
