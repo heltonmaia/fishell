@@ -7,7 +7,9 @@ socket e uma recusa interrompe qualquer nova tentativa durante 30 minutos.
 
 from __future__ import annotations
 
+import os
 import shlex
+import signal
 import subprocess
 import threading
 from collections.abc import Callable
@@ -28,16 +30,26 @@ class Resultado:
     erro: str
 
 
-Executor = Callable[[list[str], float, "Saida | None"], Resultado]
+Executor = Callable[[list[str], "float | None", "Saida | None"], Resultado]
 
 
-def executar_subprocess(argv: list[str], timeout: float, saida: Saida | None) -> Resultado:
+def _matar_grupo(p: subprocess.Popen) -> None:
+    try:
+        os.killpg(p.pid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError):
+        p.kill()
+
+
+def executar_subprocess(
+    argv: list[str], timeout: float | None, saida: Saida | None
+) -> Resultado:
     try:
         p = subprocess.Popen(
             argv,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             stdin=subprocess.DEVNULL,
+            start_new_session=True,
             text=True,
             errors="replace",
         )
@@ -50,10 +62,11 @@ def executar_subprocess(argv: list[str], timeout: float, saida: Saida | None) ->
 
     def matar() -> None:
         expirou.set()
-        p.kill()
+        _matar_grupo(p)
 
-    timer = threading.Timer(timeout, matar)
-    timer.start()
+    timer = threading.Timer(timeout, matar) if timeout is not None else None
+    if timer is not None:
+        timer.start()
     linhas: list[str] = []
     try:
         for linha in p.stdout:
@@ -62,9 +75,15 @@ def executar_subprocess(argv: list[str], timeout: float, saida: Saida | None) ->
             if saida is not None:
                 saida(linha)
         p.wait()
+    except BaseException:
+        _matar_grupo(p)
+        p.wait()
+        leitor.join(2)
+        raise
     finally:
-        timer.cancel()
-        leitor.join()
+        if timer is not None:
+            timer.cancel()
+    leitor.join()
     texto_erro = "".join(erro)
     if expirou.is_set():
         return Resultado(124, "\n".join(linhas), texto_erro or "tempo esgotado")
@@ -85,7 +104,10 @@ class Conexao:
         self._agora = agora
         self._bloqueado_ate: datetime | None = None
         self._cache: dict[str, str] = {}
-        self._trava = threading.Lock()
+        self._longa = threading.Lock()
+        self._curta = threading.Lock()
+        self._estado = threading.Lock()
+        self._serial = False
 
     def opcoes_ssh(self) -> list[str]:
         self.dir_ctl.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -99,27 +121,55 @@ class Conexao:
         ]  # fmt: skip
 
     def _verificar(self) -> None:
-        ate = self._bloqueado_ate
-        if ate is not None:
-            if self._agora() < ate:
-                raise Indisponivel(ate, "conexão recusada")
-            self._bloqueado_ate = None
+        with self._estado:
+            ate = self._bloqueado_ate
+            if ate is not None:
+                if self._agora() < ate:
+                    raise Indisponivel(ate, "conexão recusada")
+                self._bloqueado_ate = None
 
-    def _rodar(self, argv: list[str], timeout: float, saida: Saida | None) -> Resultado:
-        with self._trava:
-            self._verificar()
-            r = self._executar(argv, timeout, saida)
-            if r.codigo == 255:
-                if "Permission denied" in r.erro:
-                    raise ErroAutenticacao(r.erro.strip())
+    def _tentar(self, argv: list[str], timeout: float | None, saida: Saida | None) -> Resultado:
+        self._verificar()
+        r = self._executar(argv, timeout, saida)
+        if r.codigo == 255 and not self._canal_recusado(r):
+            if "Permission denied" in r.erro:
+                raise ErroAutenticacao(r.erro.strip())
+            with self._estado:
                 self._bloqueado_ate = self._agora() + BLOQUEIO
-                raise Indisponivel(self._bloqueado_ate, r.erro.strip())
+                ate = self._bloqueado_ate
+            raise Indisponivel(ate, r.erro.strip())
+        return r
+
+    @staticmethod
+    def _canal_recusado(r: Resultado) -> bool:
+        return r.codigo == 255 and (
+            "mux_client_request_session" in r.erro or "Session open refused" in r.erro
+        )
+
+    def _rodar(
+        self, argv: list[str], timeout: float | None, saida: Saida | None, longa: bool
+    ) -> Resultado:
+        lock = self._longa if (longa or self._serial) else self._curta
+        with lock:
+            r = self._tentar(argv, timeout, saida)
+        if not self._canal_recusado(r):
             return r
+        # canal extra recusado: nao e recusa da conta; passa a um canal so
+        self._serial = True
+        with self._longa:
+            r = self._tentar(argv, timeout, saida)
+        if self._canal_recusado(r):
+            raise RuntimeError(r.erro.strip())
+        return r
 
     def comando(
-        self, remoto: str, timeout: float = 60, saida: Saida | None = None
+        self, remoto: str, timeout: float | None = 60, saida: Saida | None = None
     ) -> Resultado:
-        return self._rodar(["ssh", *self.opcoes_ssh(), self.alias, remoto], timeout, saida)
+        if saida is not None:
+            timeout = None
+        return self._rodar(
+            ["ssh", *self.opcoes_ssh(), self.alias, remoto], timeout, saida, saida is not None
+        )
 
     def resolver(self, caminho: str) -> str:
         if caminho in self._cache:
@@ -135,6 +185,8 @@ class Conexao:
         )
         r = self.comando(f'printf %s "{seguro}"')
         valor = r.saida.strip()
+        if r.codigo != 0 or not valor:
+            raise RuntimeError(f"não resolvi {original!r}: {r.erro.strip()}")
         self._cache[original] = valor
         return valor
 
@@ -145,7 +197,7 @@ class Conexao:
         argv += [f"--include={i}" for i in t.incluir]
         argv += [f"--exclude={e}" for e in t.excluir]
         argv += [origem, destino]
-        return self._rodar(argv, 3600, saida)
+        return self._rodar(argv, None, saida, True)
 
     def fechar(self) -> None:
         """Encerra o mestre (ssh -O exit); nunca levanta."""

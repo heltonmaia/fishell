@@ -112,3 +112,111 @@ def test_resolver_til_e_escapes(tmp_path):
     assert chamadas[0][-1] == 'printf %s "$HOME/x"'
     c.resolver('a"b`c\\d$(rm)')
     assert chamadas[1][-1] == 'printf %s "a\\"b\\`c\\\\d\\$(rm)"'
+
+
+# --- rodada de correcoes 1 ---
+import subprocess
+import threading
+import time
+
+from fishell.adapters.conexao import executar_subprocess
+
+
+def montar_bloqueante(tmp_path, mux_primeira=False):
+    soltar = threading.Event()
+    rsync_iniciou = threading.Event()
+    chamadas = []
+    estado = {"mux": mux_primeira, "timeouts": []}
+
+    def executar(argv, timeout, saida):
+        chamadas.append(argv)
+        estado["timeouts"].append((argv[0], timeout))
+        if argv[0] == "rsync":
+            rsync_iniciou.set()
+            soltar.wait(5)
+            return Resultado(0, "", "")
+        if estado["mux"]:
+            estado["mux"] = False
+            return Resultado(255, "", "mux_client_request_session: session request failed")
+        return Resultado(0, "ok", "")
+
+    c = Conexao("npad", tmp_path / "ctl", executar, Relogio())
+    return c, chamadas, soltar, rsync_iniciou, estado
+
+
+def em_thread(fn):
+    feito = threading.Event()
+    res = {}
+
+    def alvo():
+        try:
+            res["v"] = fn()
+        except Exception as e:  # noqa: BLE001
+            res["e"] = e
+        feito.set()
+
+    threading.Thread(target=alvo, daemon=True).start()
+    return feito, res
+
+
+def test_consulta_curta_nao_espera_rsync_longo(tmp_path):
+    c, _, soltar, iniciou, _ = montar_bloqueante(tmp_path)
+    longo, _ = em_thread(lambda: c.rsync("a/", "npad:b/", Transferencia("a/", "b/")))
+    assert iniciou.wait(2)
+    curto, res = em_thread(lambda: c.comando("squeue"))
+    assert curto.wait(2), "consulta curta ficou presa atras do rsync"
+    assert not longo.is_set()
+    soltar.set()
+    assert longo.wait(2)
+
+
+def test_recusa_de_canal_extra_vira_modo_serial(tmp_path):
+    c, chamadas, soltar, iniciou, _ = montar_bloqueante(tmp_path, mux_primeira=True)
+    r = c.comando("squeue")
+    assert r.codigo == 0
+    assert len(chamadas) == 2  # refeita uma vez
+    assert c._bloqueado_ate is None
+    longo, _ = em_thread(lambda: c.rsync("a/", "npad:b/", Transferencia("a/", "b/")))
+    assert iniciou.wait(2)
+    curto, _ = em_thread(lambda: c.comando("squeue"))
+    time.sleep(0.3)
+    assert not curto.is_set(), "em modo serial a consulta deve esperar o rsync"
+    soltar.set()
+    assert longo.wait(2) and curto.wait(2)
+
+
+def test_rsync_e_comando_com_saida_sem_timeout(tmp_path):
+    c, _, soltar, _, estado = montar_bloqueante(tmp_path)
+    soltar.set()
+    c.rsync("a/", "npad:b/", Transferencia("a/", "b/"))
+    c.comando("x", saida=lambda l: None)
+    c.comando("y")
+    assert estado["timeouts"][0] == ("rsync", None)
+    assert estado["timeouts"][1][1] is None
+    assert estado["timeouts"][2][1] == 60
+
+
+def test_resolver_falha_nao_e_cacheado(tmp_path):
+    c, chamadas, _ = montar(
+        tmp_path,
+        [Resultado(1, "", "boom"), Resultado(0, "   ", ""), Resultado(0, "/h/x", "")],
+    )
+    with pytest.raises(RuntimeError, match="boom"):
+        c.resolver("~/x")
+    with pytest.raises(RuntimeError):
+        c.resolver("~/x")
+    assert c.resolver("~/x") == "/h/x"
+    assert len(chamadas) == 3
+
+
+def test_saida_que_levanta_mata_o_filho(tmp_path):
+    def ruim(linha):
+        raise ValueError("app fechou")
+
+    t0 = time.monotonic()
+    with pytest.raises(ValueError):
+        executar_subprocess(["sh", "-c", "echo a; sleep 5.123; echo b"], None, ruim)
+    assert time.monotonic() - t0 < 3
+    time.sleep(0.2)
+    vivo = subprocess.run(["pgrep", "-f", "sleep 5.123"], capture_output=True)
+    assert vivo.stdout == b""
