@@ -121,3 +121,43 @@ def test_cli_hub_passa_garantir_vigia(tmp_path, monkeypatch):
     h = cli._hub()
     h._iniciar_vigia()
     assert chamadas == [tmp_path / "est"]
+
+
+AGORA = datetime(2026, 10, 31, 12, 0)
+
+
+def _dormida(tmp_path, destinos):
+    """Roda um ciclo com destinos {nome: (intervalo, ate|None)} e devolve a espera pedida."""
+    estado = Estado(tmp_path / "e.db")
+    ads = {}
+    for nome, (intervalo, ate) in destinos.items():
+        estado.registrar(nome, "1", "p", "n", None, None)
+        ads[nome] = AdaptadorFalso(
+            nome, intervalo=intervalo, erro=Indisponivel(ate) if ate else None
+        )
+    hub = Hub(ads, estado, [])
+    sonos = []
+
+    def dormir(s):
+        sonos.append(s)
+        for nome in destinos:
+            estado.atualizar(nome, "1", EstadoJob.OK)
+
+    vigia.rodar_vigia(hub, estado, lambda a, b: None, dormir, agora=lambda: AGORA)
+    return sonos[0]
+
+
+def test_ate_no_passado_dorme_o_intervalo(tmp_path):
+    assert _dormida(tmp_path, {"npad": (60, AGORA - timedelta(minutes=1))}) == 60
+
+
+def test_indisponivel_nao_atrasa_outro_destino(tmp_path):
+    espera = _dormida(
+        tmp_path,
+        {"npad": (60, AGORA + timedelta(minutes=30)), "local": (3, None)},
+    )
+    assert espera == 3
+
+
+def test_espera_minima_de_um_segundo(tmp_path):
+    assert _dormida(tmp_path, {"npad": (60, AGORA + timedelta(seconds=0.5))}) == 1

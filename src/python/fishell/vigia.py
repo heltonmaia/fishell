@@ -21,6 +21,7 @@ def rodar_vigia(
     estado: Estado,
     notificar: Callable[[str, str], None],
     dormir: Callable[[float], None],
+    agora: Callable[[], datetime] = datetime.now,
 ) -> int:
     while True:
         visao = hub.atualizar()
@@ -36,15 +37,18 @@ def rodar_vigia(
             return 1
         if not ativos and not estado.pendentes_de_aviso():
             return 0
-        ate = [visao.indisponivel_ate[d] for d in ativos if d in visao.indisponivel_ate]
-        if ate:
-            espera = (min(ate) - datetime.now()).total_seconds()
-        else:
-            espera = min(
-                (hub.adaptadores[d].intervalo for d in ativos if d in hub.adaptadores),
-                default=3.0,
-            )
-        dormir(max(espera, 0.0))
+        agora_ = agora()
+        esperas = []
+        for d in ativos:
+            if d not in hub.adaptadores:
+                continue
+            ate = visao.indisponivel_ate.get(d)
+            if ate is not None and ate > agora_:
+                esperas.append((ate - agora_).total_seconds())
+            else:
+                esperas.append(hub.adaptadores[d].intervalo)
+        espera = min(esperas, default=3.0)
+        dormir(max(espera, 1.0))
 
 
 def pegar_lock(dir_est: Path):
