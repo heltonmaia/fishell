@@ -149,7 +149,7 @@ function Set-Lang {
             HDR_TYPE='tecle'; HDR_OR='ou'; HDR_EXIT='para sair'
             PANEL='PAINEL DE CONTROLE'
             M1_T='abrir shell seguro';  M1_H='( ssh npad )'
-            M2_T='testar conexão';      M2_H='( sem conectar )'
+            M2_T='testar conexão';      M2_H='( testa o ssh )'
             M3_T='enviar arquivos';     M3_H='( scp push )'
             M4_T='baixar arquivos';     M4_H='( scp pull )'
             M5_T='executar comando';    M5_H='( uma vez )'
