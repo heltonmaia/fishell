@@ -295,6 +295,9 @@ ver "sessão sumiu" no meio.
 
 ### Regras inegociáveis (NPAD)
 
+O NPAD bloqueia a conta por cerca de 30 minutos depois de muitas conexões novas
+em poucos minutos. É daí que vêm as duas primeiras regras.
+
 - **Uma só conexão SSH** (`ControlMaster=auto`, `ControlPersist=600`) para
   tudo, com no máximo dois canais: um para transferências e streaming, outro
   para consultas curtas. Se o servidor recusar o segundo, o fishell cai para
@@ -336,6 +339,16 @@ uv run pytest -q src/python/tests/test_slurm.py   # um arquivo
 A suíte não usa rede: os adaptadores são testados contra saídas gravadas
 (`tests/fixtures/`) e contra falsos, e o núcleo contra adaptadores falsos. O CI
 tem um job `python` que roda `uv sync --locked` e `uv run pytest -q`.
+
+**Rodar o fishell à mão fala com o NPAD.** A suíte não usa rede, mas `uv run
+fishell` e `uv run fishell jobs` usam: sem `destinos.toml`, os destinos padrão
+são `local` e `npad`, e o `jobs` sempre força a consulta. Para testar sem o
+cluster, use uma config só com o local:
+
+```bash
+mkdir -p /tmp/fc && printf '[[destino]]\nnome = "local"\ntipo = "local"\n' > /tmp/fc/destinos.toml
+FISHELL_CONFIG_DIR=/tmp/fc FISHELL_STATE_DIR=/tmp/fs uv run fishell jobs
+```
 
 **Regravar uma fixture:** rode o comando de leitura no destino (por exemplo
 `squeue`, `sinfo`, `sacct` no NPAD, pela conexão única e poucas vezes), salve a
